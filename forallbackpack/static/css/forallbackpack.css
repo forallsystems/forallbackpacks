@@ -1,0 +1,41 @@
+
+body {
+  background-color:#fff;
+}
+
+footer {
+  margin-top:30px;
+  padding:30px;
+}
+
+header {
+  margin-bottom:20px;
+}
+
+.breadcrumb {
+  margin-bottom:0;
+  border-radius: 4px 4px 0px 0px;
+}
+
+
+/* MATERIAL DESIGN TWEAKS */
+
+.form-group input[type=file] {
+  position:relative;
+  opacity:1;
+}
+
+
+.modal-title { font-weight:bold; }
+
+.help-block { width:100%; }
+
+textarea.form-control { height: 120px;}
+
+.popover { background: #fff; }
+
+.popover-title {background-color: #009688; }
+
+.popover .form-group { margin-top:0; }
+
+.popover select.input-sm {height:38px;width:200px;}

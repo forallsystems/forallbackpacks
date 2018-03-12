@@ -1,0 +1,66 @@
+{% extends "base.html" %}{% load bootstrap3 %}{% load staticfiles %}
+
+{% block title %}{{award.badge_name}}{% endblock %}
+{% block custom_head_content %}
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{award.badge_name}}">
+<meta name="twitter:description" content="{{award.badge_description|truncatechars:200}}">
+<meta name="twitter:image" content="{{award.badge_image}}">
+<meta property="og:image" content="{{award.badge_image}}" />
+<meta property="og:description" content="{{award.badge_description|truncatechars:200}}" />
+<meta property="og:title" content="{{award.badge_name}}" />
+<link rel="image_src" type="image/jpeg" href="{{award.badge_image}}" />
+{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-sm-4 text-center">
+    {% if embed %}
+    <a href="?embed=0" target="_blank">
+    {% endif %}
+    <img id="badge_image" class='img-responsive' src="{{award.badge_image}}"/>
+    {% if embed %}
+    </a>
+    {% else %}
+      <br/>
+    {% endif %}
+
+
+
+  </div>
+  {% if not embed %}
+  <div class="col-sm-8" style="font-size:1.2em;">
+
+      <h1>{{award.badge_name}}</h1><br/>
+      <p><b>Awarded To:</b> {{award.student_name}}</p>
+      <p><b>Awarded By:</b> {{award.issuer_org_name}}</p>
+      <p><b>Awarded On:</b> {{award.issued_date}}</p>
+      {% if award.expiration_date %}
+      <p><b>Expires On:</b> {{award.expiration_date}}</p>
+      {% endif %}
+    <p><b>Description:</b> {{award.badge_description|linebreaksbr}}</p>
+    <p><b>Criteria:</b> {{award.badge_criteria|linebreaksbr}}</p>
+
+    <p id='attachmentArea'>
+      {% if award.evidence|length %}
+
+      <b>Evidence:</b><br/>
+      {% for e in award.evidence %}
+        {% if e.file %}
+            <a href='{{e.file}}' download='download' title='Download'>Download {{e.label}}</a><br/>
+        {% else %}
+            {% if e.hyperlink %}
+            <a href='{{e.hyperlink}}' title='View'>View {{e.label}}</a><br/>
+            {% else %}
+                {% if e.description %}
+                <p>{{ e.description|linebreaksbr }}</p>
+                {% endif %}
+            {% endif %}
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+    </p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

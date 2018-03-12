@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Account Activated!{% endblock %}
+
+{% block content %}
+
+<form method="post" class='registrationForm' action="" onSubmit="">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}" />
+
+  <h3>Email Address Verified!</h3>
+    <div class="text-left ">
+        Your email address has been successfully verified.  Click the button bellow to access
+        your account.
+    </div>
+    <br/>
+    <input type="button" onclick="javascript:document.location.href='/'" class="btn btn-raised btn-warning" value="Go To My Backpack" />
+    <br/> <br/>
+</form>
+<br/><br/><br/>
+<br/><br/><br/><br/><br/><br/><br/><br/><br/>
+{% endblock %}

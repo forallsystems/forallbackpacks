@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="ForallBackpack">
+    <meta name="application-name" content="ForAllBackpacks">
+    <meta name="viewport" content = "width = device-width, initial-scale = 1.0, minimum-scale = 1, maximum-scale = 1, user-scalable = no" />
+    <title>ForAllBackpacks</title>
+    <link rel="SHORTCUT ICON" href="img/favicon.ico">
+    <link rel="stylesheet" href="bootstrap/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="font-awesome/css/font-awesome.min.css">
+    <link rel="stylesheet" href="bootstrap-material-design/dist/css/bootstrap-material-design.min.css">
+    <link rel="stylesheet" href="bootstrap-material-design/dist/css/ripples.min.css">
+    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Roboto:300,400,500,700">
+    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" type="text/css" href="timeline2/css/timeline.css">
+
+    <link rel="stylesheet" type="text/css" href="css/font-roboto.css">
+    <link rel="stylesheet" type="text/css" href="css/font-material-icons.css">
+    <link rel="stylesheet" href="css/forallbackpack.css">
+
+    <link rel="apple-touch-icon" href="img/apple-touch-icon-iphone.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="img/touch-icon-ipad.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="img/touch-icon-iphone-retina.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="img/touch-icon-ipad-retina.png">
+
+
+</head>
+<body>
+    <div id="root" class="container-fluid" style="height:100%;">
+    </div>
+    <script src="jquery/dist/jquery.min.js"></script>
+    <script src="bootstrap/dist/js/bootstrap.min.js"></script>
+    <script src="arrive/minified/arrive.min.js"></script>
+    <script src="bootstrap-material-design/dist/js/material.min.js"></script>
+    <script src="bootstrap-material-design/dist/js/ripples.min.js"></script>
+    <script src="localforage/dist/localforage.min.js"></script>
+    <script src="timeline2/js/timeline-min.js"></script>
+    <script src="timeline2/js/storyjs-embed.js"></script>
+    <script type="text/javascript" src="https://apis.google.com/js/client.js"></script>
+    <script src="js/urlize.js"></script>
+    <script src="js/bundle.js"></script>
+    <script type="text/javascript">
+        $.material.init();
+
+        // For 'View Details' links within Timeline slides
+        function timelineViewBadgeDetails(uid) {
+            var event = new CustomEvent('build', {'detail': {uid:uid}});
+            event.initEvent('timelineViewBadgeDetails', true, true);
+            document.dispatchEvent(event);
+        }
+
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}{{event.name}}{% endblock %}
+{% block custom_head_content %}
+<link rel="stylesheet" href="{% static 'css/forallbackpack_public.css' %}">
+<style>
+footer, header { display:none; }
+</style>
+
+{% endblock %}
+{% block content %}
+
+  <form id="myForm" class='registrationForm' method='post' action="" >
+    <input type="hidden" id="myFormCheck" required="true" value=""/>
+    {% if event.header_image %}
+    <img src="{{event.header_image}}" class="img-responsive" style="max-width:300px;margin:0 auto;"/>
+    <br/>
+    {% endif %}
+    <h1>{{event.name}}</h1>
+
+    <img src="{{event.badge_image}}" style="width:250px;height:250px;"/>
+    <br/><br/>
+    <p class='lead' style='font-size:1em;'>{{event.badge_description}}</p>
+
+    <br/>
+    Class Code: <input required type='text' id='classCode' value='' placeholder='' oninput="setCustomValidity('')"/>
+    <br/><br/>
+    {% if event.is_pledge %}
+    <input id="submit" type="submit" onclick="validateClassCode()" class="btn btn-raised btn-warning" style="text-transform:none;padding-left:10px;padding-right:10px;font-size:14px;" 
+        value="Pledge for this Badge on ForAllBackpacks" />
+    {% else %}
+    <input id="submit" type="submit" onclick="validateClassCode()" class="btn btn-raised btn-warning" style="text-transform:none;padding-left:10px;padding-right:10px;font-size:14px;" 
+        value="Claim Your Badge on ForAllBackpacks" />
+    {% endif %}
+    <br/><br/>
+
+  </form>
+  <br/>  <br/>  <br/>  <br/>  <br/>  <br/>  <br/>
+<script language="javascript">
+
+    var validationError = null;
+    
+    $(document).ready(function() {
+        $("#myForm").submit(function(event) {
+            event.preventDefault(); //cancel submit
+        })
+    });
+
+    function validateClassCode() {
+        if(validationError) {
+            $('#classCode')[0].setCustomValidity(validationError);  
+            validationError = null;
+            return;
+        }
+          
+        var classCode = $('#classCode').val().trim();
+        
+        $('#classCode')[0].setCustomValidity('');
+
+        if(!classCode) {
+            $('#classCode')[0].setCustomValidity('Please enter your class code.');
+        } else {
+            $.ajax({
+                type: "POST",
+                url: "/api/event/validate_classcode/",
+                data: {
+                    'event_id': '{{event.id}}',
+                    'class_code': classCode
+                },
+                success: function(data) {
+                    if(data['is_valid']) {
+                        document.location.href='/?event={{event.id}}&class_code='+classCode;
+                    } else {
+                        validationError = 'This class code is invalid';                        
+                        setTimeout(function(){ $('#submit').click(); }, 1);
+                    }
+                }
+            });
+        }
+    }
+</script>
+{% endblock %}

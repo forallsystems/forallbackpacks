@@ -1,0 +1,61 @@
+{% extends "base.html" %}{% load bootstrap3 %}{% load staticfiles %}
+
+{% block title %}{{entry.title}}{% endblock %}
+{% block custom_head_content %}
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="{{entry.title}}">
+<meta name="twitter:description" content="{{entry.text|truncatechars:200}}">
+<meta name="twitter:image" content="{{meta_image}}">
+<meta property="og:image" content="{{meta_image}}" />
+<meta property="og:description" content="{{entry.text|truncatechars:200}}" />
+<meta property="og:title" content="{{entry.title}}" />
+<link rel="image_src" type="image/png" href="{{meta_image}}" />
+{% endblock %}
+{% block content %}
+
+{% for section in entry.sections %}
+<div class="row">
+    <div class="col-xs-12" style="margin-bottom:2em;">
+        <b>{{ section.created_dt|date:"F jS, Y" }}</b>
+        <h1 style="margin-top:8px">{{ section.title}}</h1>
+
+
+        <p style="font-size:1.1em;margin-top:2em;">
+        {{ section.text|linebreaksbr|urlize }}
+        </p>
+
+        {% if section.attachments|length %}
+        <div id='attachmentArea' class="clearfix" style="margin-top:2em;">
+        {% for attachment in section.attachments %}
+            <div class="pull-left" style="display:inline-block;margin:0 6px 6px 0;">
+            {% if attachment.award %}
+                <a href="{{ attachment.award.view_url }}" title="View {{ attachment.award.badge_name }}" target="_blank">
+                    <img src="{{ attachment.award.badge_image_data_uri }}" height="56" />
+                </a>
+            {% else %}
+                {% if attachment.image_url %}
+                <a href="{{ attachment.image_url }}" title="View {{ attachment.label }}" target="_blank">
+                    <img src="{{ attachment.image_url }}" height="56" />
+                </a>
+                {% else %}
+                    {% if attachment.file %}
+                <a href="{{ attachment.file }}" download='download' title="Download {{ attachment.label }}">
+                    <i class="fa {{ attachment.icon}} fa-4x" aria-hidden="true"></i>
+                </a>
+                    {% else %}
+                <a href="{{ attachment.hyperlink }}" title="View {{ attachment.label }}" target="_blank">
+                    <i class="fa {{ attachment.icon}} fa-4x" aria-hidden="true"></i>
+                </a>
+                    {% endif %}
+                {% endif %}
+            {% endif %}
+            </div>
+        {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endfor %}
+
+{% endblock %}

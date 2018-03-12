@@ -1,0 +1,273 @@
+body {
+background-color: #5cb984;
+text-align:center;
+background: url('../images/fb_background.jpg') no-repeat center center fixed;
+-webkit-background-size: cover;
+-moz-background-size: cover;
+-o-background-size: cover;
+background-size: cover;
+
+}
+
+.feature {
+  background-color: #5cb984;
+  text-align:center;
+  background: url('../images/fb_background.jpg') no-repeat center center fixed;
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;
+  padding-bottom:100px;
+}
+
+.featureLogo {
+  width:500px;
+  margin:0 auto;
+  margin-top:50px;
+}
+
+.feature a {
+  padding:10px;
+  display:inline-block;
+  width:200px;
+  border-radius:10px;
+  font-size:1.6em;
+}
+
+.feature a.signup {
+  background-color:#00c989;
+  color:#ffffff;
+  margin-right:20px;
+  border:1px solid #ffffff;
+}
+
+.feature a.login {
+  background-color:#ffffff;
+  color:#00c989;
+  border:1px solid #00c989;
+}
+
+.featureBottom {
+background-color:#00c989;
+
+text-align:center;
+color:#ffffff;
+padding:0px 50px;
+
+  padding-top:45px;
+  padding-bottom:45px;
+}
+
+.feature p {
+  padding-top:50px;
+  font-size:1.4em;
+  font-weight:bold;
+  color:#fff;
+}
+
+.appColumn {
+  width:24%;
+  float:left;
+  text-align:center;
+  border-right:1px solid #eee;
+  color:#7a7a7a;
+  font-size:.9em;
+  padding-bottom:20px;
+  min-height:200px;
+}
+
+.appColumn a {
+  color:#7a7a7a;
+}
+
+.appColumn p {
+  font-size:1.2em;
+}
+
+.appColumn div a {
+  text-decoration:underline;
+}
+
+.appColumn div {
+  padding:10px;
+}
+
+.appColumn img {
+  width:80px;
+  height:80px;
+  margin-top:20px;
+}
+
+.appColumn h2 {
+  font-family:Bitter;
+  font-weight:400;
+  margin-top:5px;;
+  margin-bottom:0;
+}
+
+.appColumn h2 em {
+  font-style:normal;
+}
+
+.farApp {
+  padding-left:2%;
+}
+
+.farApp h2 {
+  color:#f29c33;
+}
+.farApp h2 em {
+  color:#dd7c06;
+}
+
+.fabApp h2 {
+  color:#00c989;
+}
+.fabApp h2 em {
+  color:#03885e;
+}
+
+.fapApp h2 {
+  color:#387d7e;
+}
+.fapApp h2 em {
+  color:#1b4243;
+}
+
+.fahApp h2 {
+  color:#48578c;
+}
+.fahApp h2 em {
+  color:#222e5c;
+}
+
+.fahApp {
+  border-right:0;
+}
+
+
+h3 {
+  margin-top:0;
+}
+
+form {
+width:400px;
+background-color:#ffffff;
+padding:30px 0px;
+border-radius:20px;
+margin:0 auto;
+margin-top:40px;
+color:#606060;
+font-size:1.1em;
+font-weight:300;
+box-shadow: 0px 4px 5px 0px rgba(0,0,0,0.29);
+text-align:center;
+}
+
+.form-group label.control-label {
+  font-size:14px;
+}
+
+.registrationForm, .claimForm {
+  width:70%;
+  min-width:400px;
+  padding:50px;
+  padding-top:30px;
+}
+
+.checkbox label {
+  font-weight:200;
+  color:#606060;
+}
+
+.form-group {
+margin-top:10px;
+}
+
+.form-group label {
+  text-align:left;
+  display:block;
+  color:#606060;
+  font-size:1.1em;
+}
+
+.registrationForm .checkbox, .claimForm .checkbox {
+  text-align:left;
+}
+
+input {
+max-width:330px;
+margin: 0 auto;
+}
+
+
+.registrationForm input, .claimForm input{
+max-width:100%;
+margin: 0 auto;
+}
+
+.btn {
+  font-size:1.1em;
+  margin-bottom:20px;
+}
+
+.modal-header, .modal-body {
+text-align:left;
+}
+
+/* Extra Small Devices, Phones */
+@media only screen and (max-width : 480px) {
+  form, .registrationForm, .claimForm {
+    margin:0;
+    width:100%;
+    border-radius:0;
+    box-shadow:0;
+    padding:10px;
+    min-width:auto;
+  }
+
+  .registrationForm input, .claimForm input {
+    max-width:100%;
+  }
+
+  .container {
+    padding:0;
+  }
+
+  .feature {
+    padding-bottom:30px;
+  }
+
+  .featureLogo {
+    width:80%;
+    max-width:500px;
+    margin-top:15px;
+  }
+
+  .feature a {
+    padding:10px;
+    display:block;
+    width:200px;
+    border-radius:10px;
+    font-size:1.6em;
+
+    margin: 0 auto;
+    margin-bottom:15px;
+    margin-top:15px;
+  }
+
+  .feature a.signup {
+    margin: 0 auto;
+    margin-top:15px;
+  }
+
+  .feature p {
+    padding-top:10px;
+    line-height:1em;
+  }
+
+  footer .text-right {
+    text-align:left;
+  }
+
+}

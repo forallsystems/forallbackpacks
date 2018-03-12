@@ -1,0 +1,131 @@
+{% load compress %}{% load staticfiles %}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="format-detection" content="telephone=no">
+
+  <title>ForAllBackpacks | {% block title %}{% endblock %}</title>
+
+  <link rel="SHORTCUT ICON" href="{% static 'images/favicon.ico' %}">
+
+  {% compress css %}
+  <link rel="stylesheet" href="{% static 'node_modules/bootstrap/dist/css/bootstrap.min.css' %}"/>
+  <link rel="stylesheet" href="{% static 'node_modules/DataTables/datatables.min.css' %}"/>
+  <link rel="stylesheet" href="{% static 'node_modules/font-awesome/css/font-awesome.min.css' %}">
+  <link rel="stylesheet" href="{% static 'node_modules/x-editable/dist/bootstrap3-editable/css/bootstrap-editable.css' %}">
+  <link rel="stylesheet" href="{% static 'node_modules/bootstrap-material-design/dist/css/bootstrap-material-design.min.css' %}">
+  <link rel="stylesheet" href="{% static 'node_modules/bootstrap-material-design/dist/css/ripples.min.css' %}">
+
+
+  <link rel="stylesheet" href="{% static 'css/forallbackpack.css' %}">
+  {% if not user.is_authenticated and not award %}
+  <link rel="stylesheet" href="{% static 'css/forallbackpack_public.css' %}">
+  {% endif %}
+
+  {% endcompress %}
+
+  {% compress js %}
+  <script src="{% static 'node_modules/jquery/dist/jquery.min.js' %}"></script>
+  {% endcompress %}
+
+  <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+  <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+  <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+  <![endif]-->
+
+  {% block custom_head_content %}{% endblock %}
+</head>
+<body >
+  {% if user.is_authenticated or award %}
+  {% if not embed %}
+  <header style="border-bottom:8px solid #00c989;background-color:#fff;">
+      <div class="container">
+        <div class="row" style="padding:10px;">
+          <div class="col-sm-6">
+          {% if primary_logo %}
+            <img src="{{ primary_logo }}" class="img-responsive" style="max-height:80px;"/>
+          {% else %}
+            <img src="{% static 'images/fb_logo.png' %}" class="img-responsive" style="max-height:80px;"/>
+          {% endif %}
+          </div>
+          <div class="col-sm-6 hidden-xs">
+
+          </div>
+        </div>
+      </div>
+  </header>
+  {% endif %}{% endif %}
+  <div class="container" style="min-height:500px;">
+    {% block content %}{% endblock %}
+  </div>
+  {% if not embed %}
+  <footer style="background-color:#fff;color:#666;border-top:1px solid #eeeeee;">
+    <div class="container">
+      <div class="row">
+        <div class='col-sm-6 text-left'>
+          &copy; 2018 Forall Systems, Inc.</a> All Rights Reserved<br/>
+          <a href="https://www.forallsystems.com/termsofuse/" target="blank">Terms of Use & Privacy Policy</a>
+        </div>
+        <div class='col-sm-6 text-right'>
+          <a href="https://www.forallsystems.com/" target="blank">Powered by the ForAllSystems Platform</a>
+        </div>
+      </div>
+
+    </div>
+  </footer>
+  {% endif %}
+
+  {% compress js %}
+  <script src="{% static 'node_modules/bootstrap/dist/js/bootstrap.min.js' %}"></script>
+  <script src="{% static 'node_modules/DataTables/datatables.min.js' %}"></script>
+  <script src="{% static 'node_modules/x-editable/dist/bootstrap3-editable/js/bootstrap-editable.min.js' %}"></script>
+  <script src="{% static 'node_modules/bootstrap-material-design/dist/js/material.min.js' %}"></script>
+  <script src="{% static 'node_modules/bootstrap-material-design/dist/js/ripples.min.js' %}"></script>
+  <script src="{% static 'node_modules/js-cookie/src/js.cookie.js' %}"></script>
+  <script type="text/javascript">
+    $.material.init();
+
+    function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie != '') {
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+                var cookie = jQuery.trim(cookies[i]);
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    $(document).ready(function(){
+        // iOS web app full screen hacks.
+        if(window.navigator.standalone == true) {
+            // make all link remain in web app mode.
+            $('a').click(function() {
+                window.location = $(this).attr('href');
+                return false;
+            });
+        }
+        
+        $.ajaxSetup({
+            crossDomain: false, // obviates need for sameOrigin test
+            beforeSend: function(xhr, settings) {
+                // Always reset token from cookie
+                xhr.setRequestHeader("X-CSRFToken", getCookie('csrftoken'));
+            }
+        });        
+    });
+
+  </script>
+  {% endcompress %}
+</body>
+</html>

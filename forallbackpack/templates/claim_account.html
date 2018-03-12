@@ -1,0 +1,327 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Sign Up{% endblock %}
+{% block custom_head_content %}
+<style>
+
+.alert a {
+text-decoration:underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="post" class='claimForm' action="{% url 'claim-account' %}" onSubmit="return onSubmit(event)">
+    {% csrf_token %}
+    {{ form.claim_code }}
+    {{ form.registration_id }}
+    {{ form.registration_name }}
+    {{ form.id }}
+    {{ form.first_name }}
+    {{ form.last_name }}
+    {{ form.email }}
+    <a href="/">
+    <img src="{% static 'images/fb_logo_vertical.png' %}" class="img-responsive" style="max-width:250px;margin:0 auto;"/>
+    </a>
+    <h3>Claim New Account</h3>
+    <!-- for AJAX errors -->
+    <div id="error_alert" class="alert alert-danger" role="alert" style="display: none;">
+        <span id="error_alert_msg"></span>
+    </div>
+    <div id="age_alert" class="alert alert-danger" role="alert" style="display: none;">
+        You must be at least 13 years old.
+    </div>
+    <div id="terms_alert" class="alert alert-danger" role="alert" style="display: none;">
+        You must agree to the Terms of Use &amp; Privacy Policy.
+    </div>
+    <div id="link_alert" class="claim-link-account" style="display: none;">
+        Enter your password to activate your existing account with <span id="registration_name"></span>.
+    </div>
+{% for key, key_errors in form.errors.as_data.items %}
+{% for error in key_errors %}
+    <div class="alert alert-danger alert-dismissable alert-link" role="alert">
+        <button class="close" type="button" data-dismiss="alert" aria-hidden="true">×</button>
+    {% for err_msg in error %}
+        {{err_msg}}
+    {% endfor %}
+    </div>
+{% endfor %}
+{% endfor %}
+
+{% if not form.claim_code.value %}
+    <span id="validateClaimCodeSection">
+    <div class="form-group">
+        <label class="control-label" for="validateClaimCodeInput">Claim Code*</label>
+        <div><input type="text" id="validateClaimCodeInput" name="validateClaimCodeInput" required
+          class="form-control"
+          oninput="validateClaimCode(this)"
+          id="validateClaimCodeInput"
+          value=""/></div>
+    </div>
+    <br/>
+    <button type="button" id="validateClaimCodeButton" class="btn btn-raised btn-warning"
+        data-loading-text="<i class='fa fa-spinner fa-spin'></i> Please Wait"
+        onClick="doValidateClaimCode()">
+        Continue
+    </button>
+    </span>
+{% endif %}
+
+    <span id="accountSection" {% if not form.claim_code.value %}style="display:none;"{% endif %}>
+
+    <div class="form-group">
+        <label class="control-label">Claim Code</label>
+        <div id="claimCodeDisplay" class="form-control-static text-left">
+            {{ form.claim_code.value }}
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="control-label">Name</label>
+        <div id="nameDisplay" class="form-control-static text-left">
+            {{ form.first_name.value }} {{ form.last_name.value }}
+        </div>
+    </div>
+<!-- show if email -->
+    <div class="form-group" id="emailDisplaySection" {% if not form.email.value %}style="display:none;"{% endif %}>
+        <label class="control-label" for="emailDisplay">Email Address</label>
+        <div id="emailDisplay" class="form-control-static text-left">
+            {{ form.email.value }}
+        </div>
+    </div>
+<!-- hide if email -->
+    <div class="form-group" id="emailSection" {% if form.email.value %}style="display:none;"{% endif %}>
+        <label class="control-label" for="id_email2">Email Address*</label>
+        <div><input type="email" name="email2" id="id_email2" required
+            class="form-control"
+            oninvalid="this.setCustomValidity('Email is Required.')"
+            oninput="setCustomValidity('')"
+            id="id_email2"
+            value="{% if form.email2.value %}{{ form.email2.value }}{% endif %}" /></div>
+    </div>
+    <div class="form-group">
+        <label class="control-label" for="id_password">Password*</label>
+        <div><input type="password" name="password" id="id_password" required
+          class="form-control"
+          oninput="validatePassword(this)"
+          value="{% if form.password.value %}{{ form.password.value }}{%endif%}"/></div>
+<!-- new accounts only -->
+        <small class='claim-new-account text-left' id="password_help_text" {% if form.id.value %}style="display:none;"{% endif %}>
+        Password must be at least 8 characters and contain at least one uppercase letter and one number.
+        </small>
+    </div>
+<!-- new accounts only -->
+    <span class="claim-new-account"  {% if form.id.value %}style="display:none;"{% endif %}>
+        <div class="form-group" style="margin-top:25px;">
+            <label class="control-label" for="id_password2">Confirm Password*</label>
+            <div><input type="password" name="password2" id="id_password2" required
+              class="form-control"
+              oninput="validatePassword2(this)"
+              value="{% if form.password2.value %}{{ form.password2.value }}{%endif%}"/></div>
+        </div>
+        <div class="form-group" style="margin-top:25px;">
+          <label class="control-label">You Must Meet Both Of These Requirements To Create An Account:</label>
+        </div>
+        <div class="checkbox">
+            <label style="font-size:.9em;">
+                <input id="age_checkbox" type="checkbox" value="1">
+                I am at least 13 years old.  
+            </label>
+        </div>
+        <div class="checkbox">
+            <label style="font-size:.9em;">
+                <input id="terms_checkbox" type="checkbox" value="1">
+                I have read and agree to the <a href="https://www.forallsystems.com/termsofuse/" target="_blank">Terms of Use &amp; Privacy Policy</a>.
+            </label>
+        </div>
+    </span>
+    <br/>
+
+<!-- new accounts only -->
+    <button id="createButton" type="submit" class="btn btn-raised btn-warning claim-new-account"
+        data-loading-text="<i class='fa fa-spinner fa-spin'></i> Please Wait"
+        {% if form.id.value %}style="display:none;"{% endif %}>
+    Create Account
+    </button>
+
+<!-- link accounts only -->
+    <button id="activateButton" type="submit" class="btn btn-raised btn-warning claim-link-account"
+        data-loading-text="<i class='fa fa-spinner fa-spin'></i> Please Wait"
+        {% if not form.id.value %}style="display:none;"{% endif %}>
+    Activate Account
+    </button>
+
+    </span>
+
+    <div class="text-center text-warning">
+        <br/>* Indicates a required field
+    </div>
+</form>
+<br/><br/><br/><br/><br/><br/><br/><br/><br/><br/>
+<script>
+
+function hideErrorAlert() {
+    $('#error_alert').hide();
+    $('#error_alert_msg').html('');
+}
+
+function showErrorAlert(msg) {
+    $('#error_alert_msg').html(msg);
+    $('#error_alert').show();
+}
+
+function validateClaimCode(input) {
+    var validateClaimCodeButton = $('#validateClaimCodeButton');
+    var value = $('#validateClaimCodeInput').val().trim();
+
+    if(!value) {
+        input.setCustomValidity('This field is required.');
+    } else {
+        input.setCustomValidity('');
+    }
+}
+
+function doValidateClaimCode() {
+    hideErrorAlert();
+
+    var claim_code = $('#validateClaimCodeInput').val().trim();
+    if(!claim_code) {
+        $('#validateClaimCodeInput').focus();
+        return;
+    }
+
+    var validateClaimCodeButton = $('#validateClaimCodeButton').button('loading');
+
+    $.ajax({
+        url: '{% url "validate-account-claim-code" %}',
+        method: 'POST',
+        data: {
+            claim_code: claim_code
+        },
+        error: function(xhr, status, err) {
+            console.error('error', status, err);
+            showErrorAlert(err || 'We are unable to claim your account at this time.  Please contact technical support.');
+        },
+        success: function(data) {
+            console.debug('success', data);
+
+            if(data.error) {
+                showErrorAlert(data.error);
+            } else {
+                // Update field values
+                $('#id_claim_code').val(claim_code);
+                $('#id_registration_id').val(data.registration_id);
+                $('#id_registration_name').val(data.registration_name);
+                $('#id_id').val(data.forallbackpack_user_id);
+                $('#id_first_name').val(data.first_name);
+                $('#id_last_name').val(data.last_name);
+                $('#id_email').val(data.email);
+                $('#id_email2').val(data.email);
+
+                $('#registration_name').html(data.registration_name);
+                $('#claimCodeDisplay').html(claim_code);
+                $('#nameDisplay').html(data.first_name+' '+data.last_name);
+                $('#emailDisplay').html(data.email);
+
+                // Email display or submit
+                if(data.email) {
+                    $('#emailSection').hide();
+                    $('#emailDisplaySection').show();
+                } else {
+                    $('#emailDisplaySection').hide();
+                    $('#emailSection').show();
+                }
+
+                // Create or link account
+                if(data.forallbackpack_user_id) {
+                    $('.claim-new-account').hide();
+                    $('.claim-link-account').show();
+                } else {
+                    $('.claim-link-account').hide();
+                    $('.claim-new-account').show();
+                }
+
+                $('#validateClaimCodeSection').hide();
+                $('#accountSection').show();
+            }
+        },
+        complete: function() {
+            validateClaimCodeButton.button('reset');
+        }
+    });
+}
+
+function validatePassword(input) {
+    var value = $('#id_password').val().trim();
+
+    if(!value) {
+        input.setCustomValidity('This field is required.');
+    } else if(
+        (value.length < 8)      // at least 8 characters
+     || !/\d/.test(value)       // at least one number
+     || !/[A-Z]/.test(value)    // at least one upper-case character
+     )
+    {
+        input.setCustomValidity('Password must be at least 8 characters and contain at least one uppercase letter and one number.');
+    } else {
+        input.setCustomValidity('');
+        validatePassword2(document.getElementById('id_password2'));
+    }
+}
+
+function validatePassword2(input) {
+    if($('#id_id').val()) {
+        // No checks required for existing accounts
+        $('#id_password2').val($('#id_password').val().trim());
+        input.setCustomValidity('');
+    } else {
+        var value = $('#id_password2').val().trim();
+
+        if(!value) {
+            input.setCustomValidity('This field is required.');
+        } else if(value != $('#id_password').val().trim()) {
+            input.setCustomValidity('The password you entered does not match what you typed above.');
+        } else {
+            input.setCustomValidity('');
+        }
+    }
+}
+
+function validatePhoneNumber(elem) {
+    if(elem.value && !elem.value.match(/\d{3}-\d{3}-\d{4}/)) {
+        elem.setCustomValidity('Phone number must be entered as: XXX-XXX-XXXX.');
+    } else {
+        elem.setCustomValidity('');
+    }
+}
+
+function onSubmit(event) {
+    $('#age_alert, #terms_alert').hide();
+
+    if($('#id_id').val()) {
+        // No checks required for existing accounts
+        $('#activateButton').attr('disabled', 'disabled').button('loading');
+    } else {
+        // Make sure terms of service is checked before form submission
+        if(!$('#age_checkbox').prop('checked')) {
+            $('#age_alert').show();
+            window.scrollTo(0, 0);
+            event.preventDefault();
+            return false;
+        }
+        if(!$('#terms_checkbox').prop('checked')) {
+            $('#terms_alert').show();
+            window.scrollTo(0, 0);
+            event.preventDefault();
+            return false;
+        }
+
+        $('#createButton').attr('disabled', 'disabled').button('loading');
+    }
+    return true;
+}
+
+$(function() {
+
+});
+
+</script>
+{% endblock %}

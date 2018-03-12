@@ -1,0 +1,166 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Sign Up{% endblock %}
+{% block custom_head_content %}
+<style>
+
+.alert a {
+text-decoration:underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<form method="post" class='registrationForm' action="{% url 'register' %}" onSubmit="return onSubmit(event)">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}" />
+  <a href="/">
+  <img src="{% static 'images/fb_logo_vertical.png' %}" class="img-responsive" style="max-width:250px;margin:0 auto;"/>
+  </a>
+  <h3>Create New Account</h3>
+
+  <div id="age_alert" class="alert alert-danger" role="alert" style="display: none;">
+      You must be at least 13 years old.
+  </div>
+  <div id="terms_alert" class="alert alert-danger" role="alert" style="display: none;">
+      You must agree to the Terms of Use &amp; Privacy Policy.
+  </div>
+  {% for key, key_errors in form.errors.as_data.items %}
+  {% for error in key_errors %}
+  <div class="alert alert-danger alert-dismissable alert-link" role="alert">
+    <button class="close" type="button" data-dismiss="alert" aria-hidden="true">×</button>
+    {% if error.code == "email_duplicate" %}
+    It looks like you already have an account on ForAllBackpacks.<br/>You may <a href="/login/">login to your account</a> or <a href="/password_reset/">reset your password</a>.
+    {%else%}
+      {% for err_msg in error %}
+      {{err_msg}}
+      {% endfor %}
+    {%endif%}
+  </div>
+  {% endfor %}
+  {% endfor %}
+
+        <div class="form-group">
+            <label class="control-label" for="id_first_name">First Name*</label>
+            <div><input type="text" name="first_name" required
+              class="form-control"
+              oninvalid="this.setCustomValidity('First Name is Required.')"
+              oninput="setCustomValidity('')"
+              id="id_first_name"
+               value="{% if form.first_name.value %}{{ form.first_name.value }}{%endif%}"/></div>
+        </div>
+        <div class="form-group">
+            <label class="control-label" for="id_last_name">Last Name*</label>
+            <div><input type="text" name="last_name" required
+              class="form-control"
+              oninvalid="this.setCustomValidity('Last Name is Required.')"
+              oninput="setCustomValidity('')"
+              id="id_last_name"
+              value="{% if form.last_name.value %}{{ form.last_name.value }}{%endif%}"
+              /></div>
+        </div>
+        <div class="form-group">
+            <label class="control-label" for="id_email">Email Address*</label>
+            <div><input type="text" name="email" id="id_email" required
+              class="form-control"
+              oninvalid="this.setCustomValidity('Email Address is Required.')"
+              oninput="setCustomValidity('')"
+              value="{% if form.email.value %}{{ form.email.value }}{%endif%}"
+              maxlength="254" /></div>
+        </div>
+<!--
+        <div class="form-group">
+            <label class="control-label" for="id_phone+number">Phone Number</label>
+            <div><input type="text" name="phone_number" id="id_phone_number"
+                class="form-control"
+                oninput="validatePhoneNumber(this)"
+                placeholder="XXX-XXX-XXXX"
+                value="{% if form.phone_number.value %}{{ form.phone_number.value }}{% endif %}"
+                maxlength="12" /></div>
+        </div>
+-->
+        <div class="form-group">
+            <label class="control-label" for="id_last_name">Password*</label>
+            <div><input type="password" name="password1" required
+              class="form-control"
+              oninvalid="this.setCustomValidity('Password is Required.')"
+              oninput="setCustomValidity('')"
+              id="id_password1"
+              value="{% if form.password1.value %}{{ form.password1.value }}{%endif%}"/></div>
+            <small class='text-left'>Password must be at least 8 characters and contain at least one uppercase letter and one number.</small>
+        </div>
+        <div class="form-group" style="margin-top:25px;">
+            <label class="control-label" for="id_last_name">Confirm Password*</label>
+            <div><input type="password" name="password2" required
+              oninvalid="this.setCustomValidity('Confirm Password is Required.')"
+              oninput="setCustomValidity('')"
+              class="form-control" id="id_password2"
+              value="{% if form.password2.value %}{{ form.password2.value }}{%endif%}"/></div>
+        </div>
+
+        <div class="form-group" style="margin-top:25px;">
+          <label class="control-label">You Must Meet Both Of These Requirements To Create An Account:</label>
+        </div>
+        <div class="checkbox">
+            <label style="font-size:.9em;">
+                <input id="age_checkbox" type="checkbox" value="1">
+                I am at least 13 years old.  If you are under 13, you can sign up through your school or out of school program.
+            </label>
+        </div>
+
+        <div class="checkbox">
+            <label style="font-size:.9em;">
+                <input id="terms_checkbox" type="checkbox" value="1">
+                I have read and agree to the <a href="https://www.forallsystems.com/termsofuse/" target="_blank">Terms of Use &amp; Privacy Policy</a>.
+            </label>
+        </div>
+        <br/>
+
+        <button id="createButton" type="submit" class="btn btn-raised btn-warning" data-loading-text="<i class='fa fa-spinner fa-spin'></i> Please Wait">
+        Create Account
+        </button>
+
+    <div class="text-center text-warning">
+        <br/>* Indicates a required field
+    </div>
+
+</form>
+<br/><br/>
+<script>
+
+function validatePhoneNumber(elem) {
+    if(elem.value && !elem.value.match(/\d{3}-\d{3}-\d{4}/)) {
+        elem.setCustomValidity('Phone number must be entered as: XXX-XXX-XXXX.');
+    } else {
+        elem.setCustomValidity('');
+    }
+}
+
+
+// Make sure terms of service is checked before form submission
+function onSubmit(event) {
+    $('#age_alert, #terms_alert').hide();
+
+    if(!$('#age_checkbox').prop('checked')) {
+        $('#age_alert').show();
+        window.scrollTo(0, 0);
+        event.preventDefault();
+        return false;
+    }
+    if(!$('#terms_checkbox').prop('checked')) {
+        $('#terms_alert').show();
+        window.scrollTo(0, 0);
+        event.preventDefault();
+        return false;
+    }
+
+    $('#createButton').attr('disabled', 'disabled').button('loading');
+    return true;
+}
+
+$(function() {
+    // noop
+});
+
+</script>
+{% endblock %}

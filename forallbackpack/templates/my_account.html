@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% load bootstrap3 %}
+
+{% block title %}My Account{% endblock %}
+{% block breadcrumbs %}
+  <li class="active">My Account</li>
+{% endblock %}
+
+{% block content %}
+
+  <form action="" method="post" class="form-horizontal" enctype="multipart/form-data">
+  {% csrf_token %}
+
+    <div class="row">
+      <div class="col-sm-8">
+        <h2>My Account</h2>
+      </div>
+      <div class="col-sm-4 text-right">
+        <button class="btn btn-primary btn-raised" type="submit" ><i class="fa fa-plus"></i> Save</button>
+        <button class="btn btn-default btn-raised" type="button" onclick="location.href='/'"><i class="fa fa-chevron-left"></i> Cancel</button>
+      </div>
+    </div>
+
+    {% bootstrap_form form layout='horizontal' %}
+
+  </form>
+
+
+{% endblock %}

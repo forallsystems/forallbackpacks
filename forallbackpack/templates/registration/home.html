@@ -1,0 +1,29 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Take Your Badges With You{% endblock %}
+{% block custom_head_content %}
+<style>
+body {
+  background:none;
+  background-color: #fff;
+}
+.container { width: 100%; padding:0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class='feature'>
+  <img class='featureLogo' src="{% static 'images/fb_logo_vertical_homepage.png' %}"/>
+  <br/>
+  <a href="/register/" class='signup'>Sign Up</a>
+  <a href="/login/" class='login'>Log In</a>
+  <br/>
+  <p style="">
+    <img src="{% static 'images/FSBadge.png' %}" style="width:30px;margin-bottom:5px;"/> Claim your ForAllSystems Badge by creating a new account!
+  </p>
+</div>
+
+
+
+
+{% endblock %}

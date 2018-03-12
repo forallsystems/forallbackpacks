@@ -1,0 +1,48 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}{{event.name}}{% endblock %}
+{% block custom_head_content %}
+<link rel="stylesheet" href="{% static 'css/forallbackpack_public.css' %}">
+<style>
+footer, header { display:none; }
+</style>
+
+{% endblock %}
+{% block content %}
+
+  <form class='registrationForm' >
+
+    {% if event.header_image %}
+    <img src="{{event.header_image}}" class="img-responsive" style="max-width:300px;margin:0 auto;"/>
+    <br/>
+    {% endif %}
+    <h1>{{event.name}}</h1>
+
+      <img src="{{event.badge_image}}" style="width:250px;height:250px;"/>
+      <br/><br/>
+      <p class='lead' style='font-size:1em;'>{{event.description|linebreaksbr}}</p>
+      <hr/>
+
+
+        <div class='col-md-offset-1 col-md-5'>
+          <b>Already Have an Account?</b><br/>
+          <input type="button" class="btn btn-raised btn-warning" style="margin-top:10px;text-transform:none;padding-left:10px;padding-right:10px;font-size:14px;" value="Login With Your Account"
+            onclick="document.location.href='/?event={{event.id}}&redirect=login'"/>
+        </div>
+
+        <div class="clearfix visible-sm-block visible-xs-block"><br/></div>
+
+        <div class='col-md-5'>
+          <b>First Time?</b><br/>
+          <input type="button" class="btn btn-raised btn-warning" style="margin-top:10px;text-transform:none;padding-left:10px;padding-right:10px;font-size:14px;" value="Create a New Account"
+            onclick="document.location.href='/?event={{event.id}}&redirect=register'"/>
+        </div>
+
+      <br/>  <br/>  <br/>
+
+  </form>
+  <br/>  <br/>  <br/>
+  <script language="javascript">
+
+  </script>
+
+{% endblock %}

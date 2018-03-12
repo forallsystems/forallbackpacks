@@ -1,0 +1,25 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Verify Your Email Address{% endblock %}
+
+{% block content %}
+
+<form method="post" class='registrationForm' action="" onSubmit="">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}" />
+  <a href="/">
+  <img src="{% static 'images/fb_logo_vertical.png' %}" class="img-responsive" style="max-width:250px;margin:0 auto;"/>
+  </a>
+
+  <h3>Verify Your Email Address</h3>
+    <div class="text-left ">
+        We have sent you
+        an email with instructions on how to verify your email address.  If you have
+        not received an email, click the button below to re-send the verification email.
+    </div>
+    <br/>
+    <input type="button" onclick="javascript:document.location.href='/sendActivation/{{useremail_id}}/'" class="btn btn-raised btn-warning" value="Send Verification Email" />
+    <br/> <br/>
+</form>
+<br/><br/><br/>
+<br/><br/><br/><br/><br/><br/><br/><br/><br/>
+{% endblock %}
