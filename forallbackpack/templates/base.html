@@ -10,25 +10,24 @@
   <title>ForAllBackpacks | {% block title %}{% endblock %}</title>
 
   <link rel="SHORTCUT ICON" href="{% static 'images/favicon.ico' %}">
+  <link href='//fonts.googleapis.com/css?family=Bitter:200,400|Open+Sans:400,300' rel='stylesheet' type='text/css'>
 
   {% compress css %}
   <link rel="stylesheet" href="{% static 'node_modules/bootstrap/dist/css/bootstrap.min.css' %}"/>
-  <link rel="stylesheet" href="{% static 'node_modules/DataTables/datatables.min.css' %}"/>
   <link rel="stylesheet" href="{% static 'node_modules/font-awesome/css/font-awesome.min.css' %}">
-  <link rel="stylesheet" href="{% static 'node_modules/x-editable/dist/bootstrap3-editable/css/bootstrap-editable.css' %}">
   <link rel="stylesheet" href="{% static 'node_modules/bootstrap-material-design/dist/css/bootstrap-material-design.min.css' %}">
   <link rel="stylesheet" href="{% static 'node_modules/bootstrap-material-design/dist/css/ripples.min.css' %}">
-
-
   <link rel="stylesheet" href="{% static 'css/forallbackpack.css' %}">
-  {% if not user.is_authenticated and not award %}
+  {% if not user.is_authenticated and not award and not embed %}
+
+  <link rel="stylesheet" href="{% static 'css/lightbox.min.css' %}">
   <link rel="stylesheet" href="{% static 'css/forallbackpack_public.css' %}">
   {% endif %}
-
   {% endcompress %}
 
   {% compress js %}
   <script src="{% static 'node_modules/jquery/dist/jquery.min.js' %}"></script>
+  <script src="{% static 'js/lightbox2/lightbox.min.js' %}"></script>
   {% endcompress %}
 
   <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
@@ -69,10 +68,12 @@
       <div class="row">
         <div class='col-sm-6 text-left'>
           &copy; 2018 Forall Systems, Inc.</a> All Rights Reserved<br/>
-          <a href="https://www.forallsystems.com/termsofuse/" target="blank">Terms of Use & Privacy Policy</a>
+            <a href="https://www.forallsystems.com/" target="blank">Powered by the ForAllSystems Platform</a>
+
         </div>
         <div class='col-sm-6 text-right'>
-          <a href="https://www.forallsystems.com/" target="blank">Powered by the ForAllSystems Platform</a>
+            <a href="https://github.com/forallsystems/forallbackpacks" target="blank">Open Source</a><br/>
+            <a href="https://www.forallsystems.com/termsofuse/" target="blank">Terms of Use & Privacy Policy</a>
         </div>
       </div>
 
@@ -82,11 +83,10 @@
 
   {% compress js %}
   <script src="{% static 'node_modules/bootstrap/dist/js/bootstrap.min.js' %}"></script>
-  <script src="{% static 'node_modules/DataTables/datatables.min.js' %}"></script>
-  <script src="{% static 'node_modules/x-editable/dist/bootstrap3-editable/js/bootstrap-editable.min.js' %}"></script>
   <script src="{% static 'node_modules/bootstrap-material-design/dist/js/material.min.js' %}"></script>
   <script src="{% static 'node_modules/bootstrap-material-design/dist/js/ripples.min.js' %}"></script>
   <script src="{% static 'node_modules/js-cookie/src/js.cookie.js' %}"></script>
+  <script src="{% static 'node_modules/moment/moment.js' %}"></script>
   <script type="text/javascript">
     $.material.init();
 
@@ -115,16 +115,15 @@
                 return false;
             });
         }
-        
+
         $.ajaxSetup({
             crossDomain: false, // obviates need for sameOrigin test
             beforeSend: function(xhr, settings) {
                 // Always reset token from cookie
                 xhr.setRequestHeader("X-CSRFToken", getCookie('csrftoken'));
             }
-        });        
+        });
     });
-
   </script>
   {% endcompress %}
 </body>

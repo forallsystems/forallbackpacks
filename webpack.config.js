@@ -1,22 +1,35 @@
 const { resolve } = require('path');
 const webpack = require('webpack');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
+const WebpackShellPlugin = require('webpack-shell-plugin');
 
+//
+// manifest configuration
+//
+const manifestScript = resolve(__dirname, 'write-manifest.py');
+const manifestVersion = '0.1.0';
+const manifestDir = resolve(__dirname, 'gui-dist');
+
+//
 // core configuration
+//
 const coreConfig = {
     context: resolve(__dirname, 'gui'),
 
     entry: [
-        'react-hot-loader/patch',
-        'webpack-dev-server/client?http://localhost:8080',
-        'webpack/hot/only-dev-server',
+// add these in module.exports?
+//        'react-hot-loader/patch',
+//        'webpack-dev-server/client?http://localhost:8080',
+//        'webpack/hot/only-dev-server',
         './index.jsx'
     ],
 
     // tell webpack how to write the compiled files to disk
     output: {
+        // output file name 'template'
         filename: 'bundle.js',
+        // absolute path to directory for output files
         path: resolve(__dirname, 'gui-dist', 'js'),
+        // the url to the output directory resolved relative to the HTML page
         publicPath: '/js/'
     },
 
@@ -68,41 +81,7 @@ const coreConfig = {
         new webpack.NamedModulesPlugin(),
         new webpack.DefinePlugin({
             'process.env.NODE_ENV': JSON.stringify('production')
-        }),
-        // copy vendor assets output directory
-        new CopyWebpackPlugin([
-            {
-                from: resolve(__dirname, 'node_modules/jquery/dist/jquery.min.js'),
-                to: resolve(__dirname, 'gui-dist/jquery/dist/jquery.min.js')
-            },
-            {
-                from: resolve(__dirname, 'node_modules/bootstrap/dist'),
-                to: resolve(__dirname, 'gui-dist/bootstrap/dist')
-            },
-            {
-                from: resolve(__dirname, 'node_modules/font-awesome/css'),
-                to: resolve(__dirname, 'gui-dist/font-awesome/css')
-            },
-            {
-                from: resolve(__dirname, 'node_modules/font-awesome/fonts'),
-                to: resolve(__dirname, 'gui-dist/font-awesome/fonts')
-            },
-            {
-                from: resolve(__dirname, 'node_modules/arrive/minified/arrive.min.js'),
-                to: resolve(__dirname, 'gui-dist/arrive/minified/arrive.min.js')
-            },
-            {
-                from: resolve(__dirname, 'node_modules/bootstrap-material-design/dist'),
-                to: resolve(__dirname, 'gui-dist/bootstrap-material-design/dist')
-            },
-            {
-                from: resolve(__dirname, 'node_modules/localforage/dist/localforage.min.js'),
-                to: resolve(__dirname, 'gui-dist/localforage/dist/localforage.min.js')
-            }],
-            {
-                copyUnmodified: true
-            }
-        )
+        })
     ]
 }
 
@@ -135,16 +114,38 @@ module.exports = function(env) {
                 'env.server_root': JSON.stringify('https://testing.forallbackpacks.com/')
             })
         );
-    } else {
+    } else if(env.production && env.production == 'dev') {
         console.log('Building development');
+        
+        coreConfig.plugins.push(
+            new webpack.DefinePlugin({
+                'env.app_root': JSON.stringify('http://localhost:8080'),
+                'env.server_root': JSON.stringify('http://0.0.0.0:5000/')
+            })
+        );
+    } else {
+        console.log('Building for webpack-dev-server');
+
+        coreConfig.entry = [
+            'react-hot-loader/patch',
+            'webpack-dev-server/client?http://localhost:8080',
+            'webpack/hot/only-dev-server'
+        ].concat(coreConfig.entry);
 
         coreConfig.plugins.push(
             new webpack.DefinePlugin({
                 'env.app_root': JSON.stringify('http://localhost:8080'),
-                'env.server_root': JSON.stringify('http://127.0.0.1:5000/')
+                'env.server_root': JSON.stringify('http://0.0.0.0:5000/')
             })
         );
     }
+
+    // Write manifest with default timestamp
+    coreConfig.plugins.push(
+        new WebpackShellPlugin({
+            onBuildExit: ['python '+manifestScript+' '+manifestDir]
+        })
+    );
 
     return coreConfig;
 }

@@ -1,0 +1,35 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Login{% endblock %}
+{% block custom_head_content %}
+<style>a {text-decoration:underline;}</style>
+{% endblock %}
+{% block content %}
+  <br/>
+  <form method="post" action="{% url 'issuerjs_verify' %}" onSubmit="return onSubmit(event)">
+    {% csrf_token %}
+
+
+
+    <div class="alert alert-success" role="alert">You are about to send {{request.session.ASSSERTION_LIST|length}} badge{{ request.session.ASSSERTION_LIST|length|pluralize }} to your backpack.</div>
+
+
+
+    <button id='sendButton' type="submit" class="btn btn-raised btn-warning"  data-loading-text="<i class='fa fa-spinner fa-spin'></i> Please Wait">
+      Send
+    </button>
+
+    <br/>
+    <a href="/issuerjs/logout/">I am not {{request.user.email}}</a>
+
+  </form>
+
+
+  <script>
+  function onSubmit(event) {
+
+      $('#sendButton').attr('disabled', 'disabled').button('loading');
+      return true;
+  }
+  </script>
+
+{% endblock %}

@@ -11,6 +11,7 @@ export class Modal extends React.Component {
     constructor(props) {
         super(props);
 
+        this.dataBackdrop = "true"; // "static"
         this.dialogClassName = "modal-dialog";
 
         this.showModal = () => {
@@ -49,7 +50,7 @@ export class Modal extends React.Component {
 
     render() {
         return (
-            <div className="modal fade" id={this.eventId}>
+            <div className="modal" id={this.eventId} data-backdrop={this.dataBackdrop}>
                 <div className={this.dialogClassName}>
                     {this.renderContent()}
                 </div>
@@ -60,7 +61,11 @@ export class Modal extends React.Component {
 }
 
 export function showInfoModal(title, msg) {
-    dispatchCustomEvent('showInfoModal', {title: title, msg: msg});
+    if(arguments.length < 2) {
+        dispatchCustomEvent('showInfoModal', {title: '', msg: title});
+    } else {
+        dispatchCustomEvent('showInfoModal', {title: title, msg: msg});
+    }
 }
 
 export class InfoModal extends Modal {
@@ -90,11 +95,20 @@ export class InfoModal extends Modal {
     }
 }
 
-export function showConfirmModal(msg, onConfirm) {
-    dispatchCustomEvent('showConfirmModal', {
-        msg: msg, 
-        onConfirm: onConfirm
-    });
+export function showConfirmModal(title, msg, onConfirm) {
+    if(arguments.length < 3) {
+        // Support default title
+        dispatchCustomEvent('showConfirmModal', {
+            msg: title, 
+            onConfirm: msg
+        });
+    } else {
+        dispatchCustomEvent('showConfirmModal', {
+            title: title,
+            msg: msg, 
+            onConfirm: onConfirm
+        });
+    }
 }
 
 export class ConfirmModal extends Modal {
@@ -103,6 +117,7 @@ export class ConfirmModal extends Modal {
     
         this.eventId = 'showConfirmModal';
         this.state = {
+            title: '',
             msg: '',
             onConfirm: ''
         };
@@ -117,7 +132,7 @@ export class ConfirmModal extends Modal {
         return (
             <div className="modal-content">
                 <div className="modal-header">
-                    <h4 className="modal-title">Confirm</h4>
+                    <h4 className="modal-title">{this.state.title || 'Confirm'}</h4>
                 </div>
                 <div className="modal-body"style={{maxHeight: '420px', overflowY: 'scroll'}}>
                     {this.state.msg.split("\n").map(function(line, j) {
@@ -188,6 +203,56 @@ export class ErrorModal extends Modal {
     }
 }
 
+export class LoginModal extends Modal {
+    constructor(props) {
+        super(props);
+        this.eventId = 'showLoginModal';
+        
+        this.state = {
+            title: '',
+            msg: ''
+        }
+        
+        this.onLogin = (e) => {
+            this.hideModal();
+            this.props.onLogin();
+        }
+    }
+
+    renderContent() {
+        return (
+            <div className="modal-content">
+                {(this.state.title) ? (
+                    <div className="modal-header">
+                        <button type="button" className="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                        <h4 className="modal-title">{this.state.title}</h4>
+                     </div>
+                ) : null}
+                <div className="modal-body">
+                    <p className="text-danger">{this.state.msg}</p>
+                </div>
+                <div className="modal-footer">
+                    <button type="button" className="btn btn-default" onClick={this.hideModal}
+                        style={{width: '80px'}}>
+                        Cancel
+                    </button>
+                    <button type="button" className="btn btn-danger" onClick={this.onLogin}
+                        style={{width: '80px'}}>
+                        Login
+                    </button>
+                </div>
+            </div>
+        );
+    }
+}
+
+export function showLoginModal(title, msg) {
+    dispatchCustomEvent('showLoginModal', {title: title, msg: msg});
+}
+
+
 export function showProgressModal(msg) {
     dispatchCustomEvent('showProgressModal', {msg: msg});
 }
@@ -200,15 +265,17 @@ export class ProgressModal extends Modal {
     constructor(props) {
         super(props);
         this.eventId = 'showProgressModal';
+        this.dataBackdrop = 'static';
     }
 
     handleEvent(e) {
         switch(e.type) {
             case this.eventId:
                 this.setState(e.detail);
+                
                 this.showModal();
                 break;
-
+       
             case 'hideProgressModal':
                 this.hideModal();
                 break;
@@ -236,451 +303,6 @@ export class ProgressModal extends Modal {
             </div>
         );
     }
-}
-
-export class ExportAuthModal extends Modal {
-    constructor(props) {
-        super(props);
-        this.eventId = 'showExportAuthModal';
-    }
-
-    renderContent() {
-        var authAurl = this.state.url
-            +'?ref='+encodeURIComponent(location.href)+'&id='+this.state.id;
-
-        return (
-            <div className="modal-content">
-                <div className="modal-header">
-                    <button type="button" className="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                 </div>
-                <div className="modal-body text-center">
-                    <h5>Exporting to {this.state.name} requires your authorization.</h5>
-
-                    <a className="btn btn-warning btn-raised"
-                        href={authAurl}>
-                        Begin Authorization
-                    </a>
-                </div>
-            </div>
-        );
-    }
-
-}
-
-ExportAuthModal.show = function(serviceConfig, id) {
-    dispatchCustomEvent('showExportAuthModal', {
-        name: serviceConfig.name,
-        url: serviceConfig.url,
-        id: id
-    });
-}
-
-export class SharePublicLinkModal extends Modal {
-    constructor(props) {
-        super(props);
-        this.eventId = 'showSharePublicLinkModal';
-        
-        this.onDelete = (e) => {
-            this.hideModal();
-            this.props.onDelete(this.state.id);
-        };
-        
-        this.onCopy = (e) => {
-            var successful = false;
-            
-            e.preventDefault();
-                        
-            if(navigator.userAgent.match(/ipad|ipod|iphone/i)) {
-                var editable = this.textarea.contentEditable;
-                var readOnly = this.textarea.readOnly;
-                
-                this.textarea.contentEditable = true;
-                this.readOnly = false;
-               
-                var range = document.createRange();
-                range.selectNodeContents(this.textarea);
-                
-                var sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-                
-                this.textarea.setSelectionRange(0, 999999);
-                this.textarea.contentEditable = editable;
-                this.textarea.readOnly = readOnly;
-                
-                successful = document.execCommand('copy');
-                
-                this.textarea.blur();                
-            } else {         
-                this.textarea.select();
-               
-                successful = document.execCommand('copy');
-                
-                this.textarea.setSelectionRange(0, 0);
-            }    
-            
-            if(successful) {
-                this.hideModal();
-                showInfoModal('Link Copied', 'The Link has been copied to your clipboard.');
-            }
-        };
-    }
-    
-    renderContent() {
-        var rows = (navigator.userAgent.match(/ipad|ipod|iphone/i)) ? 3 : 2;
-    
-        return (
-            <div className="modal-content">
-                <div className="modal-header">
-                    <button type="button" className="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                    <h4 className="modal-title">Public Link</h4>
-                </div>
-                <div className="modal-body" style={{fontSize:'1.2em'}}>
-                    <textarea ref={(el) => {this.textarea = el;}} readOnly={true} rows={rows} 
-                        value={this.state.url} style={{
-                            width: '100%',
-                            border: '#ffffff',
-                            fontSize:'1.1em',
-                            resize: 'none'
-                        }} 
-                    />
-                    <div className="bootstrap-well">
-                        <i>Use this link to share your badge with the world.</i>
-                    </div>
-                </div>
-                <div className="modal-footer">
-                    {(this.state.id) ? (
-                        <button type="button" className="btn btn-danger" onClick={this.onDelete}>
-                            Delete Share
-                        </button>
-                    ) : null}
-                    <button type="button" className="btn btn-success" onClick={this.onCopy}>
-                        Copy Link
-                    </button>
-                </div>
-            </div>
-        );
-    }
-}
-
-SharePublicLinkModal.show = function(id, url) {
-    dispatchCustomEvent('showSharePublicLinkModal', {id: id, url: url});
-}
-
-export class ShareEmbedModal extends Modal {
-    constructor(props) {
-        super(props);
-        this.eventId = 'showShareEmbedModal';
-        
-        this.onDelete = (e) => {
-            this.hideModal();
-            this.props.onDelete(this.state.id);
-        };
-
-        this.onCopy = (e) => {
-            var successful = false;
-
-            e.preventDefault();
-                        
-            if(navigator.userAgent.match(/ipad|ipod|iphone/i)) {
-                var editable = this.textarea.contentEditable;
-                var readOnly = this.textarea.readOnly;
-                
-                this.textarea.contentEditable = true;
-                this.readOnly = false;
-               
-                var range = document.createRange();
-                range.selectNodeContents(this.textarea);
-                
-                var sel = window.getSelection();
-                sel.removeAllRanges();
-                sel.addRange(range);
-                
-                this.textarea.setSelectionRange(0, 999999);
-                this.textarea.contentEditable = editable;
-                this.textarea.readOnly = readOnly;
-                
-                successful = document.execCommand('copy');
-                                
-                this.textarea.blur();                
-            } else {         
-                this.textarea.select();
-                
-                successful = document.execCommand('copy');
-
-                this.textarea.setSelectionRange(0, 0);
-            }        
-
-            if(successful) {
-                this.hideModal();
-                showInfoModal('HTML Copied', 'The HTML has been copied to your clipboard.');
-            }
-        };        
-    }
-
-    renderContent() {
-        var rows = (navigator.userAgent.match(/ipad|ipod|iphone/i)) ? 5 : 3;
-        var value = "<iframe width='300' height='300' frameborder='0' src='"+this.state.url+"'></iframe>";
- 
-        return (
-            <div className="modal-content">
-                <div className="modal-header">
-                    <button type="button" className="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                    <h4 className="modal-title">HTML Embed</h4>
-                </div>
-                <div className="modal-body" style={{fontSize:'1.2em'}}>
-                     <textarea ref={(el) => {this.textarea = el;}} readonly={true} rows={rows} 
-                        value={value} style={{
-                            width: '100%',
-                            border: '#ffffff',
-                            fontSize:'1.1em',
-                            resize: 'none'
-                        }} />
-                   <div className="bootstrap-well">
-                        <i>Use this HTML to embed your badges on a web page.</i>
-                    </div>
-                </div>
-                <div className="modal-footer">
-                    {(this.state.id) ? (
-                        <button type="button" className="btn btn-danger" onClick={this.onDelete}>
-                            Delete Share
-                        </button>                   
-                    ) : null}
-                    <button type="button" className="btn btn-success" onClick={this.onCopy}>
-                        Copy HTML
-                    </button>
-                </div>
-            </div>
-        );
-    }
-}
-
-ShareEmbedModal.show = function(id, url) {
-    dispatchCustomEvent('showShareEmbedModal', {id: id, url: url});
-}
-
-export class ShareBlockedModal extends Modal {
-    constructor(props) {
-        super(props);
-        this.eventId = 'showShareBlockedModal';
-
-        this.openWindow = (e) => {
-            this.hideModal();
-            window.open(this.state.url, '_blank', 'width=600,height=600');
-        }
-    }
-
-    renderContent() {
-        return (
-            <div className="modal-content">
-                <div className="modal-header">
-                    <button type="button" className="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                    <h4 className="modal-title">Pop-up Blocker Detected</h4>
-                </div>
-                <div className="modal-body" style={{fontSize:'1.2em'}}>
-                    <p><a href="javascript:void(0)" onClick={this.openWindow}>Click here to complete your share on {this.state.service}.</a></p>
-                    <div className="bootstrap-well">
-                        <i>To enable pop-ups, turn off "Block Pop-ups" in your browser settings.</i>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-}
-
-ShareBlockedModal.show = function(service, url) {
-    dispatchCustomEvent('showShareBlockedModal', {service: service, url: url});
-}
-
-export class ShareModal extends Modal {
-    constructor(props) {
-        super(props);
-        this.eventId = 'showShareModal';
-
-        this.onLink = this.handleShare.bind(this, 'type_link');
-        this.onEmbed = this.handleShare.bind(this, 'type_embed');
-        this.onFacebook = this.handleShare.bind(this, 'type_facebook');
-        this.onTwitter = this.handleShare.bind(this, 'type_twitter');
-        this.onPinterest = this.handleShare.bind(this, 'type_pinterest');
-        this.onGooglePlus = this.handleShare.bind(this, 'type_googleplus');
-        this.onLinkedIn = this.handleShare.bind(this, 'type_linkedin');
-
-        this.state.share = {};
-    }
-
-    handleShare(shareType, e) {
-        this.hideModal();
-        this.props.handleShare(this.state.id, shareType);
-    }
-
-    renderContent() {
-        return (
-            <div className="modal-content">
-                <div className="modal-header" style={{
-                    padding: '10px',
-                    borderBottom: '1px solid #bbb'
-                }}>
-                    <div className="row">
-                        <div className="col-xs-offset-2 col-xs-8 text-center" style={{
-                            fontWeight: 500,
-                            fontSize: '1.2em',
-                            lineHeight: 1.5,
-                        }}>
-                            Share {this.state.name} Badge
-                        </div>
-                        <div className="col-xs-2">
-                            <button type="button" className="btn pull-right" onClick={this.hideModal} style={{
-                                margin: 0,
-                                padding: '4px'
-                            }}>
-                                <i className="fa fa-times fa-lg" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div className="modal-body" style={{padding: 0, fontSize:'1.3em'}}>
-                    <div className="list-group">
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onLink}
-                                className={(this.state.share.type_link) ? "text-warning" : ""}>
-                                <i className="fa fa-link" aria-hidden="true"></i> Public Link
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onEmbed}
-                                className={(this.state.share.type_embed) ? "text-warning" : ""}>
-                                <i className="fa fa-code" aria-hidden="true"></i> HTML Embed
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onFacebook}
-                                className={(this.state.share.type_facebook) ? "text-warning" : ""}>
-                                <i className="fa fa-facebook-square" aria-hidden="true"></i> Facebook
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onTwitter}
-                                className={(this.state.share.type_twitter) ? "text-warning" : ""}>
-                                <i className="fa fa-twitter-square" aria-hidden="true"></i> Twitter
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onPinterest}
-                                className={(this.state.share.type_pinterest) ? "text-warning" : ""}>
-                                <i className="fa fa-pinterest-square" aria-hidden="true"></i> Pinterest
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onGooglePlus}
-                                className={(this.state.share.type_googleplus) ? "text-warning" : ""}>
-                                <i className="fa fa-google-plus-square" aria-hidden="true"></i> Google Plus
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onLinkedIn}
-                                className={(this.state.share.type_linkedin) ? "text-warning" : ""}>
-                                <i className="fa fa-linkedin-square" aria-hidden="true"></i> LinkedIn
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-}
-
-ShareModal.show = function(id, name, share) {
-    dispatchCustomEvent('showShareModal', {
-        id: id,
-        name: name,
-        share: (share) ? share.toJS() : {}
-    });
-}
-
-export class ExportModal extends Modal {
-    constructor(props) {
-        super(props);
-        this.eventId = 'showExportModal';
-
-        this.onDownload = (e) => {
-            this.hideModal();
-            this.props.handleDownload(this.state.id);
-        }
-
-        this.onDropbox = (e) => {
-            this.hideModal();
-            this.props.handleDropbox(this.state.id);
-        }
-
-        this.onGoogleDrive = (e) => {
-            this.hideModal();
-            this.props.handleGoogleDrive(this.state.id);
-        }
-
-        this.onOneDrive = (e) => {
-            this.hideModal();
-            this.props.handleOneDrive(this.state.id);
-        }
-    }
-
-    renderContent() {
-        return (
-            <div className="modal-content">
-                <div className="modal-header" style={{
-                    padding: '10px',
-                    borderBottom: '1px solid #bbb'
-                }}>
-                    <div className="row">
-                        <div className="col-xs-offset-2 col-xs-8 text-center" style={{
-                            fontWeight: 500,
-                            fontSize: '1.2em',
-                            lineHeight: 1.5,
-                        }}>
-                            Export {this.state.name} Badge
-                        </div>
-                        <div className="col-xs-2">
-                            <button type="button" className="btn pull-right" onClick={this.hideModal} style={{
-                                margin: 0,
-                                padding: '4px'
-                            }}>
-                                <i className="fa fa-times fa-lg" aria-hidden="true"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-                <div className="modal-body" style={{padding: 0, fontSize:'1.3em'}}>
-                    <div className="list-group">
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onDownload}>
-                                <i className="fa fa-download" aria-hidden="true"></i> Download
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onDropbox}>
-                                <i className="fa fa-dropbox" aria-hidden="true"></i> Send to Dropbox
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onGoogleDrive}>
-                                <i className="fa fa-google" aria-hidden="true"></i> Send to Google Drive
-                            </a>
-                        </div>
-                        <div className="list-group-item baseline" style={{padding: '10px 16px'}}>
-                            <a href="javascript:void(0)" onClick={this.onOneDrive}>
-                                <i className="fa fa-cloud" aria-hidden="true"></i> Send to OneDrive
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-}
-
-ExportModal.show = function(id, name) {
-    dispatchCustomEvent('showExportModal', {id: id, name: name});
 }
 
 export class ClaimedAccountModal extends Modal {
@@ -920,4 +542,113 @@ SelectBadgeModal.show = function(awardList, awardMap) {
         awardList: awardList.toJS(),
         awardMap: awardMap.toJS()
     });
+}
+
+export class ShareDetailsModal extends Modal {
+    constructor(props) {
+        super(props);
+
+        this.dialogClassName = "modal-dialog modal-sm";
+
+        this.eventId = 'showShareDetailsModal';
+
+        this.state = {shareList: []};
+    }
+    
+    renderContent() {  
+        var typeMap = {};
+        
+        constants.SHARE_TYPE_LIST.forEach(function(share_type) {
+            typeMap[share_type] = {views: 0, active: false, exists: false};
+        });
+        
+        this.state.shareList.forEach(function(shareId) {
+            var share = this.props.shareMap.get(shareId);
+            
+            if(share) {
+                var info = typeMap[share.get('type')];
+                
+                info.views += share.get('views');
+                info.active = info.active || !share.get('is_deleted');
+                info.exists = true;
+            }
+        }, this);
+
+        return (
+            <div className="modal-content">
+                <div className="modal-header">
+                    <button type="button" className="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                    <h4 className="modal-title">Share Details</h4>
+                </div>
+                <div className="modal-body">
+                    <div className="row">
+                        <div className="col-xs-offset-8 col-xs-4 text-right" style={{padding:'4px 16px 4px 0'}}>
+                        <span style={{color: 'rgba(0,0,0,.87)', fontWeight: 500}}>Views</span>
+                        </div>
+                    </div>
+                    {constants.SHARE_TYPE_LIST.map(function(share_type, i) {
+                        var info = typeMap[share_type];
+                        
+                        return (
+                            <div className="row">
+                                <div className="col-xs-8" style={{padding:'4px 0 4px 16px'}}>
+                                    <i className={constants.SHARE_TYPE_ICON_CLASS[share_type]} 
+                                        aria-hidden="true" 
+                                        style={{color: (info.active) ? '#ff5722' : '#000'}}
+                                    />
+                                    &nbsp;
+                                    {constants.SHARE_TYPE_NAME[share_type]}
+                                </div>
+                                <div className="col-xs-4 text-right" style={{padding:'4px 16px 4px 0'}}>
+                                {(info.exists) ? (
+                                    <span>{info.views}</span>
+                                ) : (
+                                    <span className="text-muted">&mdash;</span>                                
+                                )}                                
+                                </div>
+                            </div>
+                        );                   
+                    }, this)}
+                </div>
+                <div className="modal-footer">
+                    <button data-dismiss="modal" className="btn btn-default">Done</button>
+                </div>
+            </div>
+        );
+    }
+}
+
+ShareDetailsModal.show = function(shareList) {
+    dispatchCustomEvent('showShareDetailsModal', {
+        shareList: shareList.toJS()
+    });
+}
+
+export class ImageModal extends Modal {
+    constructor(props) {
+        super(props);
+
+        this.eventId = 'showImageModal';
+        this.state = {label: '', src: ''};
+    }
+    
+    renderContent() {  
+        return (
+            <div className="modal-content">
+                <div className="modal-header">
+                    <button type="button" className="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                    <h4 className="modal-title">{this.state.label}</h4>
+                </div>
+                <div className="modal-body">
+                    <img className="img-responsive" src={this.state.src} alt={this.state.label} style={{
+                        maxWidth:'100%'
+                    }}/>
+                </div>
+            </div>
+        );
+    }
+}
+
+export function showImageModal(label, src) {
+    dispatchCustomEvent('showImageModal', {label: label, src: src});
 }

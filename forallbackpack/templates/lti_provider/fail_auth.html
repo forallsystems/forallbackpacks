@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Account Not Found{% endblock %}
+{% block custom_head_content %}
+<style>
+
+.alert a {
+text-decoration:underline;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<form method="post" class='registrationForm' action="{% url 'register' %}" onSubmit="return onSubmit(event)">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ next }}" />
+  <a href="/">
+  <img src="{% static 'images/fb_logo_vertical.png' %}" class="img-responsive" style="max-width:250px;margin:0 auto;"/>
+  </a>
+
+
+  <div class="alert alert-success" role="alert" >
+      An account was not found with your email address.<br/>
+      Click the button below
+      to create a new account on ForAllBackpacks.
+  </div>
+
+
+  <button id="createButton" type="button" class="btn btn-raised btn-warning" onclick="document.location.href='/register/'" >
+  Create New Account
+  </button>
+
+
+</form>
+<br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/>
+
+{% endblock %}

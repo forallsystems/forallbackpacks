@@ -2,7 +2,8 @@ import React from 'react'
 import {Popover, Overlay} from 'react-bootstrap';
 import moment from 'moment';
 import * as constants from '../constants';
-
+import {fetchGetJSON} from '../action_creators';
+import {showErrorModal} from './Modals.jsx';
 
 export function parseQueryString(qs) {
     var parsedParameters = {};
@@ -26,52 +27,130 @@ export function dispatchCustomEvent(eventType, detail) {
     document.dispatchEvent(event);
 }
 
-export function getAttachmentIcon(url, label, height, clsName) {
-    var label = label.toLowerCase();
+export function scrollTop() {
+    document.getElementsByTagName('body')[0].scrollTop = 0;
+    document.getElementById('contentContainer').scrollTop = 0;
+}
 
-    if(/\.(gif|jpeg|jpg|png)$/.test(label)) {
+export function isOnline(action, callback) {
+    fetchGetJSON(constants.API_ROOT+'me/test/')
+        .then(() => {
+            callback();     
+        })
+        .catch((error) => {
+            if(error instanceof TypeError) {
+                error = 'You must be online to '+action+'.';
+            }                    
+            showErrorModal('No Network Connection', error);
+        });
+}
+
+export function dataURItoBlob(dataurl) {
+    var arr = dataurl.split(','), 
+        mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), 
+        n = bstr.length, 
+        u8arr = new Uint8Array(n);
+    while(n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], {type:mime});
+}
+
+export function downloadAttachment(attachment) {
+    if(window.navigator.msSaveOrOpenBlob) {
+        var blob = dataURItoBlob(attachment.data_uri);
+        window.navigator.msSaveBlob(blob, attachment.label);
+    } else {
+        var elem = window.document.createElement('a');
+        elem.href = attachment.data_uri;
+        elem.download = attachment.label;        
+        document.body.appendChild(elem);
+        elem.click();        
+        document.body.removeChild(elem);
+    }
+}
+
+export function isImageAttachment(item) {
+    var label = item.label || '';
+    
+    return /\.(gif|jpeg|jpg|png|svg)$/.test(label.toLowerCase())
+    || /\.+\.(gif|jpeg|jpg|png|svg)$/.test(item.file || item.hyperlink)
+    || /^data:image\/(png|gif|jpeg|svg+xml);.+/.test(item.data_uri);
+}
+
+// @item = attachment or evidence object (JS)
+// @award = award object (Map)
+export function getAttachmentIcon(item, award, height, clsName) {
+    if(award) {
         return (
-            <img src={url} height={height} />
+            <img src={award.get('badge_image_data_uri')} height={height} />
         );
     }
-    if(/\.(pdf)$/.test(label) || label == 'certificate') {
+               
+    var label = item.label.toLowerCase();
+    var uri = item.file || item.data_uri;
+    
+    if(/\.(gif|jpeg|jpg|png|svg)$/.test(label)
+    || /^data:image\/(png|gif|jpeg|svg+xml);.+/.test(uri)) {
+        return (
+            <img src={uri} height={height} />
+        );
+    }
+        
+    if(/\.(pdf)$/.test(label) || label == 'certificate'
+    || /^data:application\/pdf;.+/.test(uri)) {
         return (
             <i className={"fa fa-file-pdf-o "+clsName} aria-hidden="true"></i>
         );
     }
-    if(/\.(zip|gzip|gz|sit|sitx|tar|tgz)$/.test(label)) {
+    if(/\.(zip|gzip|gz|sit|sitx|tar|tgz)$/.test(label)
+    || /^data:application\/(zip|x-tar);.+/.test(uri)) {
         return (
             <i className={"fa fa-file-zip-o "+clsName} aria-hidden="true"></i>
         );
     }
-    if(/\.(doc|docx|docm)$/.test(label)) {
+    if(/\.(doc|docx|docm)$/.test(label)
+    || /^data:application\/(msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document);.+/.test(uri)) {
+
         return (
             <i className={"fa fa-file-word-o "+clsName} aria-hidden="true"></i>
         );
     }
-    if(/\.(ppt|pptx|pptm)$/.test(label)) {
+    if(/\.(ppt|pptx|pptm)$/.test(label)
+    || /^data:application\/vnd\.(ms-powerpoint|openxmlformats-officedocument\.presentationml\.presentation);.+/.test(uri)) {
+
         return (
             <i className={"fa fa-file-powerpoint-o "+clsName} aria-hidden="true"></i>
         );
     }
-    if(/\.(xlsx|xlsm|xltx|xltm)$/.test(label)) {
+    if(/\.(xlsx|xlsm|xltx|xltm)$/.test(label)
+    || /^data:application\/vnd\.(ms-excel|openxmlformats-officedocument\.spreadsheetml\.sheet);.+/.test(uri)) {
         return (
             <i className={"fa fa-file-excel-o "+clsName} aria-hidden="true"></i>
         );
     }
-    if(/\.(aac|m4a|mp3|ogg|wav|wma)$/.test(label)) {
+    if(/\.(aac|m4a|mp3|ogg|wav|wma)$/.test(label)
+    || /^data:audio\/.+;.+/.test(uri)) {
         return (
             <i className={"fa fa-file-audio-o "+clsName} aria-hidden="true"></i>
         );
     }
-    if(/\.(avi|flv|mov|mp4|mpeg|wmv)$/.test(label)) {
+    if(/\.(avi|flv|mov|mp4|mpeg|wmv)$/.test(label)
+    || /^data:video\/.+;.+/.test(uri)) {
         return (
             <i className={"fa fa-file-video-o "+clsName} aria-hidden="true"></i>
         );
-    }
+    }    
+
     return (
-        <i className={"fa fa-file-o "+clsName} aria-hidden="true"></i>
+        <i className={"fa fa-file-text-o "+clsName} aria-hidden="true"></i>
     );
+}
+
+export function isAwardExpired(awardJSON) {
+    return awardJSON.expiration_date 
+        && awardJSON.expiration_date <= moment.utc().format('YYYY-MM-DD'); 
 }
 
 // Compose share warning for trash item confirmation
@@ -189,7 +268,7 @@ export function ErrorAlert(props) {
     );
 }
 
-export function ViewCount(props) {
+export function ViewCount(props) {    
     if(props.shares.length) {
         var isShared = false;
         
@@ -199,19 +278,22 @@ export function ViewCount(props) {
             isShared = isShared || !share.get('is_deleted');
             return sum + share.get('views');
         }, 0);
-
+        
         return (
-            <div className="text-center" style={{
-                position: 'absolute',
-                top: '12px',
-                right: '30px',
-                width: '40px',
-                height: '40px',
-                borderRadius: '4px',
-                backgroundColor: (isShared) ? '#ff5722' : '#a9a6a6',
-                color: '#ffffff',
-                paddingTop: '4px'
-            }}>
+            <div className="text-center" 
+                onClick={props.onClick}
+                style={{
+                    position: 'absolute',
+                    top: '12px',
+                    right: '30px',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '4px',
+                    backgroundColor: (isShared) ? '#ff5722' : '#a9a6a6',
+                    color: '#ffffff',
+                    paddingTop: '4px',
+                    cursor: 'pointer'
+                }}>
                 <div style={{fontSize: '1.1em'}}>{nViews}</div>
                 <div style={{fontSize: '0.8em', marginTop: '-4px'}}>
                     {(nViews == 1) ? 'View': 'Views'}
@@ -239,19 +321,11 @@ export class SharePanel extends React.Component {
             }, this);        
         }
         
-        this.onLink = this.handleShare.bind(this, 'type_link');
-        this.onEmbed = this.handleShare.bind(this, 'type_embed');
-        this.onFacebook = this.handleShare.bind(this, 'type_facebook');
-        this.onTwitter = this.handleShare.bind(this, 'type_twitter');
-        this.onPinterest = this.handleShare.bind(this, 'type_pinterest');
-        this.onGooglePlus = this.handleShare.bind(this, 'type_googleplus');
-        this.onLinkedIn = this.handleShare.bind(this, 'type_linkedin');
-
         this.buildTypeMap(props, this.state.typeMap);
-    }
-
-    handleShare(shareType, e) {
-        this.props.handleShare(this.props.id, shareType, this.state.typeMap[shareType]);
+        
+        this.handleShare = (shareType) => {
+            this.props.handleShare(this.props.id, shareType, this.state.typeMap[shareType]);
+        }  
     }
 
     componentWillReceiveProps(nextProps) {
@@ -260,83 +334,26 @@ export class SharePanel extends React.Component {
         this.buildTypeMap(nextProps, typeMap);
         this.setState({typeMap: typeMap});
     }
-
+    
     render() {
-        var pinterest = null;
-
-        if(this.props.pinterest) {
-            pinterest = (
-                <a href="javascript:void(0)" title="Pinterest" onClick={this.onPinterest}
-                    style={{
-                        color: (this.state.typeMap.type_pinterest) ? '#ff5722' : '#333'
-                    }}
-                >
-                    <i className="fa fa-pinterest-square fa-lg"></i>
-                </a>
-            );
-        }
-
         return (
             <span className='shareOptions' style={{display: 'inline-block', whiteSpace: 'nowrap'}}>
-                <a href="javascript:void(0)" title="Public Link" onClick={this.onLink}
-                    style={{
-                        color: (this.state.typeMap.type_link) ? '#ff5722' : '#333'
-                    }}
-                >
-                    <i className="fa fa-link"></i>
-                </a>
-                <a href="javascript:void(0)" title="HTML Embed" onClick={this.onEmbed}
-                    style={{
-                        color: (this.state.typeMap.type_embed) ? '#ff5722' : '#333'
-                    }}
-                >
-                    <i className="fa fa-code fa-lg"></i>
-                </a>
-                <a href="javascript:void(0)" title="Facebook" onClick={this.onFacebook}
-                    style={{
-                        color: (this.state.typeMap.type_facebook) ? '#ff5722' : '#333'
-                    }}
-                >
-                    <i className="fa fa-facebook-square fa-lg"></i>
-                </a>
-                <a href="javascript:void(0)" title="Twitter" onClick={this.onTwitter}
-                    style={{
-                        color: (this.state.typeMap.type_twitter) ? '#ff5722' : '#333'
-                    }}
-                >
-                    <i className="fa fa-twitter-square fa-lg"></i>
-                </a>
-
-                {(this.props.pinterest) ? (
-                    <a href="javascript:void(0)" title="Pinterest" onClick={this.onPinterest}
-                        style={{
-                            color: (this.state.typeMap.type_pinterest) ? '#ff5722' : '#333'
-                        }}
-                    >
-                        <i className="fa fa-pinterest-square fa-lg"></i>
-                    </a>
-                ) : null}
-                <a href="javascript:void(0)" title="Google Plus" onClick={this.onGooglePlus}
-                    style={{
-                        color: (this.state.typeMap.type_googleplus) ? '#ff5722' : '#333'
-                    }}
-                >
-                    <i className="fa fa-google-plus-square fa-lg"></i>
-                </a>
-                <a href="javascript:void(0)" title="LinkedIn" onClick={this.onLinkedIn}
-                    style={{
-                        color: (this.state.typeMap.type_linkedin) ? '#ff5722' : '#333'
-                    }}
-                >
-                    <i className="fa fa-linkedin-square fa-lg"></i>
-                </a>
-            </span>
+                {constants.SHARE_TYPE_LIST.map(function(shareType, i) {
+                    var color = (this.state.typeMap[shareType]) ? '#ff5722' : 
+                        (this.props.isOffline || this.props.isInvalid) ? '#ccc' : '#333';
+                        
+                    return (
+                        <a href="javascript:void(0);"
+                            title={constants.SHARE_TYPE_NAME[shareType]}
+                            onClick={(e) => { this.handleShare(shareType) }}
+                            style={{color: color}}>
+                            <i className={constants.SHARE_TYPE_ICON_CLASS[shareType]} />
+                        </a>
+                    );
+                }, this)}
+             </span>
         );
     }
-}
-
-SharePanel.defaultProps = {
-    pinterest: true
 }
 
 export function UploadPopoverMenu(props) {
@@ -363,20 +380,78 @@ export function UploadPopoverMenu(props) {
 }
 
 export function AttachmentPopoverMenu(props) {
-    return (
-         <Overlay {...props}>
-            <Popover id="attachment-popover" style={{
-                background: '#fff',
-            }}>
-                <ul className="list-unstyled" style={{marginBottom: 0}}>
+    var overlayProps = Object.assign({}, props);
+    
+    delete overlayProps.onView;
+    delete overlayProps.onTrash;
+    delete overlayProps.onDownload;
+    delete overlayProps.isOffline;
+    delete overlayProps.attachment;
+    
+    var attachment = props.attachment;
+    var viewDownload = null;
+        
+    if(props.isOffline) {
+        if(!attachment.id) {
+            if(isImageAttachment(attachment)) {
+                // show image modal
+                viewDownload = (
                     <li style={{padding:'8px 0'}}>
                         <a href='javascript:void(0)' onClick={props.onView}>
                             <i className="fa fa-search" /> View
                         </a>
                     </li>
+                );
+            } else if(!window.navigator.standalone && attachment.fileSize) {
+                // link to download in new window
+                viewDownload = (
+                    <li style={{padding:'8px 0'}}>
+                        <a href={attachment.data_uri} download={attachment.label} target="_blank" onClick={props.onDownload}>
+                            <i className="fa fa-download" /> Download
+                        </a>
+                    </li>
+                );
+            } 
+        }
+    } else {
+        if(isImageAttachment(attachment)) {
+            // show image modal
+            viewDownload = (
+                <li style={{padding:'8px 0'}}>
+                    <a href='javascript:void(0)' onClick={props.onView}>
+                        <i className="fa fa-search" /> View
+                    </a>
+                </li>
+            );
+        } else if(attachment.id) {
+            // link to view in new window
+            viewDownload = (
+                <li style={{padding:'8px 0'}}>
+                    <a href={attachment.hyperlink} target="_blank" onClick={props.onView}>
+                        <i className="fa fa-search" /> View
+                    </a>
+                </li>
+            );
+        } else if(!window.navigator.standalone && attachment.fileSize) {
+            // link to download in new window
+            viewDownload = (
+                <li style={{padding:'8px 0'}}>
+                    <a href={attachment.data_uri} download={attachment.label} target="_blank" onClick={props.onDownload}>
+                        <i className="fa fa-download" /> Download
+                    </a>
+                </li>
+            );
+        }
+    }
+    
+    return (
+         <Overlay rootClose={true} animation={false} {...overlayProps}>
+            <Popover id="attachment-popover" style={{background: '#fff'}}>
+                <ul className="list-unstyled" style={{marginBottom: 0}}>
+                    {viewDownload}
                     <li style={{padding:'8px 0'}}>
                         <a href='javascript:void(0)' onClick={props.onTrash}>
-                            <i className="fa fa-trash"/> Trash
+                            <i className="fa fa-trash"/> Remove
                         </a>
                     </li>
                 </ul>
@@ -384,4 +459,5 @@ export function AttachmentPopoverMenu(props) {
         </Overlay>
     );
 }
+
 

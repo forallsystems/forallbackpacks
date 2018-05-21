@@ -1,5 +1,5 @@
 {% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
-{% block title %}Take Your Badges With You{% endblock %}
+{% block title %}An Open Backpack For Life-Long Learners{% endblock %}
 {% block custom_head_content %}
 <style>
 body {
@@ -13,17 +13,230 @@ body {
 {% block content %}
 
 <div class='feature'>
-  <img class='featureLogo' src="{% static 'images/fb_logo_vertical_homepage.png' %}"/>
-  <br/>
-  <a href="/register/" class='signup'>Sign Up</a>
-  <a href="/login/" class='login'>Log In</a>
-  <br/>
-  <p style="">
-    <img src="{% static 'images/FSBadge.png' %}" style="width:30px;margin-bottom:5px;"/> Claim your ForAllSystems Badge by creating a new account!
-  </p>
+
+    <div class='col-xs-12 col-sm-6'>
+      <img class='featureLogo img-responsive' src="{% static 'images/fb_logo_vertical_homepage.png' %}"/>
+
+      <a href="/register/" class='signup'>Sign Up</a>
+      <a href="/login/" class='login'>Log In</a>
+      <div class='clearfix'></div>
+      <p class='text-left' style="margin:0 auto;">
+        Set up a free account!
+      </p>
+    </div>
+    <div class='col-xs-12 col-sm-6'>
+      <img class='featureDevices img-responsive' src="{% static 'images/devices.png' %}"/>
+    </div>
+    <div class='clearfix'></div>
+</div>
+<div class='integrations hidden-xs'>
+  <img class='img-responsive' style="margin:0 auto;" src="{% static 'images/integrations.png' %}"/>
+</div>
+<div class='leaners'>
+  <h2>Powerful Features That Empower Learners</h2>
+  <div class='row'>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/1.png' %}" data-lightbox="features" data-title="Store &amp; Manage Your Badges">
+         <img src="{% static 'images/1.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Store &amp; Manage Your Badges</h3>
+     </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/2.png' %}" data-lightbox="features" data-title="On Your Phone Too">
+         <img src="{% static 'images/2.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>On Your Phone Too</h3>
+     </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/3.png' %}" data-lightbox="features" data-title="Find Your Badges Easily">
+         <img src="{% static 'images/3.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Find Your Badges Easily</h3>
+     </div>
+    </div>
+  </div>
+
+
+
+  <div class='row'>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/4.png' %}" data-lightbox="features" data-title="Share Your Achievements">
+         <img src="{% static 'images/4.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Share Your Achievements</h3>
+     </div>
+    </div>
+
+
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/6.png' %}" data-lightbox="features" data-title="Analyze Your Views">
+         <img src="{% static 'images/6.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Analyze Your Views</h3>
+     </div>
+    </div>
+
+
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/5.png' %}" data-lightbox="features" data-title="Keep Your Privacy Too">
+         <img src="{% static 'images/5.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Keep Your Privacy Too</h3>
+     </div>
+    </div>
+  </div>
+
+
+
+  <div class='row'>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/7.png' %}" data-lightbox="features" data-title="Explore On A Timeline">
+         <img src="{% static 'images/7.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Explore On A Timeline</h3>
+     </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/8.png' %}" data-lightbox="features" data-title="Capture Your Experiences">
+         <img src="{% static 'images/8.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Capture Your Experiences</h3>
+     </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/9.png' %}" data-lightbox="features" data-title="Work Without Internet Too">
+         <img src="{% static 'images/9.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Work Without Internet Too</h3>
+     </div>
+    </div>
+  </div>
+</div>
+
+<div class='issuers'>
+  <h2>Powerful Features For Badge Issuers</h2>
+  <div class='row'>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/10.png' %}" data-lightbox="issuers" data-title="Use The Same Mozilla Issuer API">
+         <img src="{% static 'images/10.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Use The Same Mozilla Issuer API</h3>
+     </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/11.png' %}" data-lightbox="issuers" data-title="Branded Badge Hosting">
+         <img src="{% static 'images/11.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>Branded Badge Hosting</h3>
+     </div>
+    </div>
+    <div class="col-sm-4">
+      <div class="thumbnail">
+       <a href="{% static 'images/12.png' %}" data-lightbox="issuers" data-title="LTI Support">
+         <img src="{% static 'images/12.png' %}">
+         <div class='zoomIcon'><i class='fa fa-search-plus'></i></div>
+       </a>
+     </div>
+     <div class="caption">
+       <h3>LTI Support</h3>
+     </div>
+    </div>
+  </div>
 </div>
 
 
+<div class="bottom">
+	<h1>The Badging Platform for<br/>Communities of Teaching and Learning</h1>
+</div>
 
+<div class='fabApp appColumn'>
+  <div>
+    <img src="{% static 'images/FABBadge.png' %}"/>
+    <h2>ForAll<em>Backpacks</em></h2>
+    <p>for Life-Long Learners</p>
+  </div>
+</div>
+
+
+<div class='farApp appColumn'>
+
+  <div>
+    <a href="https://www.forallrubrics.com"><img src="{% static 'images/FARBadge.png' %}"/></a>
+    <h2>ForAll<em>Rubrics</em></h2>
+    <p>for Teaching and Learning</p>
+  </div>
+
+</div>
+
+
+<div class='fapApp appColumn'>
+  <div>
+    <img src="{% static 'images/FAPBadge.png' %}"/>
+    <h2>ForAll<em>Pathways</em></h2>
+    <p>for Badge Issuers</p>
+  </div>
+</div>
+
+<div class='fahApp appColumn'>
+  <div>
+    <img src="{% static 'images/FAHBadge.png' %}"/>
+    <h2>ForAll<em>Hubs</em></h2>
+    <p>for Connecting Communities</p>
+  </div>
+</div>
+
+<div style="clear:both;"></div>
+
+<script>
+    lightbox.option({
+      'albumLabel': ""
+    })
+</script>
 
 {% endblock %}

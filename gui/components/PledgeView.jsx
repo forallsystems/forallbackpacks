@@ -5,13 +5,15 @@ import {connect} from 'react-redux';
 import {List, Map, Set} from 'immutable';
 import moment from 'moment';
 import * as constants from '../constants';
-import {getAttachmentIcon, ErrorAlert} from './common.jsx';
+import {
+    isOnline, isImageAttachment, getAttachmentIcon, ErrorAlert
+} from './common.jsx';
 import {
     fetchGetJSON, fetchPostJSON, fetchPatchJSON, fetchDeleteJSON,
-    updateAwardTags, deleteEntry
+    updateAwardTags, deleteEntry, setIsOffline
 } from '../action_creators';
 import {
-    showErrorModal, showInfoModal, showConfirmModal
+    showErrorModal, showInfoModal, showConfirmModal, showImageModal
 } from './Modals.jsx';
 import {Tags} from './Tags.jsx';
 
@@ -29,15 +31,74 @@ class _PledgeView extends React.Component {
             entry: entry.toJS(),
         };
 
-        this.getAttachmentIcon = (attachment) => {
-            if(attachment.award) {
-                var award = this.props.awardMap.get(attachment.award);
-                return (
-                    <img src={award.get('badge_image')} height="70" />
-                );
+// Attachments        
+        this.onClickAttachment = (attachment, isImage) => {
+            if(!isImage) {
+                showErrorModal('Offline Mode', 'You must be online to view this attachment.');
+            } else if(this.props.isOffline) {
+                showImageModal(attachment.label, attachment.data_uri);
+            } else {
+                showImageModal(attachment.label, attachment.hyperlink);            
             }
+        }
 
-            return getAttachmentIcon(attachment.file, attachment.label, 70, 'fa-5x');
+        this.getAttachmentIcon = (attachment) => {
+            return getAttachmentIcon(
+                attachment, this.props.awardMap.get(attachment.award), 70, 'fa-5x'
+            );
+        }
+
+        this.getAttachmentLink = (attachment) => {
+            var isImage = isImageAttachment(attachment);
+            
+            if(this.props.isOffline) {
+                // Pass all non-downloads to click handler
+                if(attachment.id       
+                || !attachment.fileSize
+                || (window.navigator.standalone && !isImage))
+                {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, false); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else if(isImage) {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, true); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else {
+                    return (
+                        <a href={attachment.data_uri} download={attachment.label} target="_blank">
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                }
+            } else {
+                // Pass all non-direct views to click handler
+                if(isImage) {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, true); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else {
+                    return (
+                        <a href={attachment.hyperlink} title={attachment.label} target="_blank">
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                }         
+            }
+        }
+
+// (Re)pledge
+        this.pledgeBadge = (e) => {
+            this.props.history.push('/pledge/edit/'+this.state.award.id);        
         }
 
 // Trash
@@ -49,44 +110,67 @@ class _PledgeView extends React.Component {
         }
 
         this.trashEntry = () => {
+            var self = this;
             var id = this.state.entry.id;
 
-            fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
-                .then(json => {
-                    this.props.dispatch(deleteEntry(id));
-                    this.props.history.goBack();
-                })
-                .catch(error => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete a pledge.';
-                    }
-                    showErrorModal('Error Deleting Pledge', error);
-                });
+            if(this.props.isOffline) {
+                this.props.dispatch(deleteEntry(id));
+                this.props.history.goBack();
+            } else {
+                fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
+                    .then(json => {
+                        this.props.dispatch(deleteEntry(id));
+                        this.props.history.goBack();
+                    })
+                    .catch(error => {
+                        console.error('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to delete pledge.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(deleteEntry(id));
+                                    self.props.history.goBack();
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Deleting Pledge', error);
+                        }
+                    });
+            }
         }
 
 // Tags
         this.saveTags = (value) => {
+            var self = this;
             var id = this.state.award.id;
 
-            fetchPostJSON(constants.API_ROOT+'award/'+id+'/tags/', value)
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(updateAwardTags(id, json.tags));
-                })
-                .catch((error) => {
-                    console.log('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to modify tags.'
-                    }
-                    showErrorModal('Error Saving tags', error);
-                });
-        }
-        
-// (Re)pledge
-        this.pledgeBadge = (e) => {
-            this.props.history.push('/pledge/edit/'+this.state.award.id);        
-        }
+            if(this.props.isOffline) {
+                this.props.dispatch(updateAwardTags(id, value.toJSON().sort()));
+            } else {
+                fetchPostJSON(constants.API_ROOT+'award/'+id+'/tags/', value)
+                    .then((json) => {
+                        console.debug('success', json);
+                        this.props.dispatch(updateAwardTags(id, json.tags));
+                    })
+                    .catch((error) => {
+                        console.log('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to update tags.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(updateAwardTags(id, value.toJSON().sort()));                         
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Saving tags', error);
+                        }
+                    });
+            }
+        }       
     }
 
     componentWillReceiveProps(nextProps) {
@@ -159,9 +243,7 @@ class _PledgeView extends React.Component {
                         {section.attachments.map(function(attachment, j) {
                             return (
                                 <span key={j} className="pull-left" style={{margin: '0 12px 12px 0'}}>
-                                    <a target="_blank" href={attachment.hyperlink} title={attachment.label}>
-                                    {this.getAttachmentIcon(attachment)}
-                                    </a>
+                                    {this.getAttachmentLink(attachment)}
                                 </span>
                             );
                         }, this)}
@@ -170,6 +252,7 @@ class _PledgeView extends React.Component {
                     </span>
                 );
             }, this)}
+
             <div className="row">
                 <div className="col-xs-12" style={{
                     padding: '12px 15px',
@@ -201,6 +284,7 @@ class _PledgeView extends React.Component {
 
 function mapStateToProps(state) {
     return {
+        isOffline: state.get('isOffline', false),
         user: state.get('user', new Map()),
         tags: state.get('tags', List()).get(constants.TAG_TYPE.Entry) || List(),
         awardMap: state.getIn(['awards', 'itemsById'], new Map()),

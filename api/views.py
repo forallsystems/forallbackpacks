@@ -20,7 +20,7 @@ from rest_framework import exceptions, status, viewsets
 from rest_framework.decorators import list_route, detail_route
 from rest_framework.exceptions import APIException, ValidationError, PermissionDenied
 from rest_framework.parsers import JSONParser, FormParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.serializers import ValidationError
 from rest_framework.views import set_rollback, APIView
@@ -38,8 +38,6 @@ from .permissions import create_jwt_token, get_registration, HasForallPermission
 from .serializers import *
 from oauth2_provider.models import *
 import openbadges_bakery
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPM
 from forallbackpack import assertion, file_util
 from forallbackpack.models import *
 from forallbackpack.util import send_activation_email
@@ -161,7 +159,7 @@ def handle_award_image(award, badge_image_input):
         if content_type not in [file_util.MIME_TYPE_PNG, file_util.MIME_TYPE_SVG]:
             raise ValidationError("Unknown image format '%s'" % content_type)
     else:
-        filepath = badge_image_input   
+        filepath = badge_image_input
 
     filename = os.path.basename(filepath)
     award.badge_image.save(filename, File(open(filepath)))
@@ -171,6 +169,29 @@ def handle_award_image(award, badge_image_input):
     
     os.remove(filepath)
 
+def handle_award_endorsement_image(endorsement, issuer_image_input):
+    """
+    Save issuer_image and issuer_image_data_uri for `issuer_image_input` to `endorsement`.
+    `issuer_image_input` = url or filepath
+    """
+    pr = urlparse(issuer_image_input)
+    
+    if pr.scheme and pr.netloc:
+        filepath, content_type = file_util.fetch_image(issuer_image_input)
+    
+        if content_type not in file_util.IMAGE_MIME_TYPES:
+            raise ValidationError("Unknown endorsement image format '%s'" % content_type)
+    else:
+        filepath = issuer_image_input
+    
+    filename = os.path.basename(filepath)
+    endorsement.issuer_image.save(filename, File(open(filepath)))
+    
+    endorsement.issuer_image_data_uri = file_util.make_image_data_uri(filepath, resize_to=(300, 300))
+    endorsement.save()
+    
+    os.remove(filepath)
+            
 def handle_award_push(request, award_data, user=None):
     award = Award.getAwardByExternalID(award_data['id'])
     if award:
@@ -184,6 +205,7 @@ def handle_award_push(request, award_data, user=None):
     award.external_id = award_data['id']
     award.badge_id = award_data['badge_id']
     award.external_badge_id = award_data.get('external_badge_id', '')
+    award.verified_dt = award_data.get('verified_dt', award.verified_dt)
     award.expiration_date = award_data.get('expiration_date', None) or None
     award.student_name = award_data['student_name']
     award.student_email = award_data['student_email']
@@ -197,15 +219,35 @@ def handle_award_push(request, award_data, user=None):
     award.issuer_org_name = award_data['issuer_org_name']
     award.issuer_org_origin = award_data['issuer_org_origin']
     award.issuer_org_email = award_data['issuer_org_email']
-
+    
     try:
         award.save()
     except Exception as e:        
         traceback.print_exc()
         raise e
-
+        
     handle_award_image(award, award_data['badge_image'])
 
+    # Delete any current endorsements then re-add
+    for ae in AwardEndorsement.objects.filter(award=award):
+        if ae.issuer_image:
+            ae.issuer_image.delete()
+        ae.delete()
+    
+    for data in award_data.get('endorsements', []):        
+        ae = AwardEndorsement.objects.create(
+            award=award,
+            issuer_name=data['issuer_name'],
+            issuer_url=data.get('issuer_url', ''),
+            issuer_email=data.get('issuer_email', ''),
+            issued_on=data['issued_on']
+        )
+
+        ae_image = data.get('issuer_image', None)
+         
+        if ae_image:
+            handle_award_endorsement_image(ae, ae_image)
+        
     # Delete any current evidence then re-add
     for e in Evidence.objects.filter(award=award):
         if e.file:
@@ -240,12 +282,12 @@ def handle_award_push(request, award_data, user=None):
             # Upload by user
             evidence.file.save(evidence_filename, File(open(evidence_filepath)))
             os.remove(evidence_filepath)
-
+            
     return award
 
 def get_registration_for_claim_code(claim_code):
     """Return `Registration` for claim_code"""
-    m = re.match(r'^(.+)_(.+)$', claim_code)
+    m = re.match(r'^([^-_]+)[-_](.+)$', claim_code)
     if not m:
         raise APIException("The Claim Code you entered is invalid")
 
@@ -373,6 +415,7 @@ class MyViewSet(LoggingMixin, viewsets.ViewSet):
         award = Award.objects.create(
             user=request.user,
             issued_date=date.today().strftime('%Y-%m-%d'),
+            verified_dt=timezone.now(),
             student_name=request.user.get_full_name(),
             student_email=request.user.email,
             badge_name="ForAllSystems",
@@ -541,7 +584,7 @@ class MyViewSet(LoggingMixin, viewsets.ViewSet):
 
     @list_route(methods=['post'])
     def claim_badge(self, request):
-        """UNUSED: Claim a badge using a claim code"""
+        """Claim a badge using a claim code"""
         userprofile = UserProfile.objects.get(user=request.user)
 
         claim_code = request.data.get('claim_code', '')
@@ -622,6 +665,61 @@ class UserViewSet(LoggingMixin, viewsets.ViewSet):
 
         return Response({'exists': 0, 'id': '', 'is_validated': False})
 
+    @list_route(methods=['post'])
+    def generate_username(self, request):
+        """
+        Generate a valid, unique username based on a first and last name.
+        Note: Username must be at least 6 characters with only numbers, letters, and +/-/_/.
+        """
+        prefix = request.data.get('prefix', '')
+        if not prefix:
+            raise APIException('Expected "prefix"')
+            
+        first_name = request.data.get('first_name', '')        
+        if not first_name:
+            raise APIException('Expected "first_name"')
+        
+        last_name = request.data.get('last_name', '')
+        if not last_name:
+            raise APIException('Expected "last_name"')
+        
+        # Only valid chars
+        first_name = re.sub('[^A-Za-z0-9+-_]', '', first_name)
+        last_name = re.sub('[^A-Za-z0-9+-_]', '', last_name)
+        
+        # Pad with '0' as needed
+        fragment = '%s%s' % (first_name[0].lower(), last_name.lower())  
+        fragment += '0' * (5 - len(fragment))
+        
+        # Scope by prefix
+        lookup_scope = '%s_%s' % (prefix, fragment)
+          
+        n = User.objects.filter(username__istartswith=lookup_scope).count()+1
+        
+        return Response({'username': '%s%d' % (fragment, n)})        
+    
+    @list_route(methods=['post'])
+    def set_password(self, request):
+        """Set user password"""   
+        serializer = SetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+        
+        try:
+            userprofile = UserProfile.objects.get(pk=validated_data['forallbackpack_user_id'])
+        except UserProfile.DoesNotExist:
+            return Response('User account not found.', 
+                status=status.HTTP_400_BAD_REQUEST)
+            
+        if not userprofile.user.is_active:
+            return Response('User account is not active.', 
+                status=status.HTTP_400_BAD_REQUEST)
+        
+        userprofile.user.set_password(validated_data['password'])
+        userprofile.user.save()
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+                    
     @list_route(methods=['post'])
     def reset_password(self, request):
         """Reset user password"""
@@ -810,7 +908,7 @@ class UserViewSet(LoggingMixin, viewsets.ViewSet):
                 return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
         except UserProfile.DoesNotExist:
             return Response('User account not found', status=status.HTTP_400_BAD_REQUEST)
-        except UserEmail:
+        except UserEmail.DoesNotExist:
             return Response('User account for email address not found', status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(e.message, status=status.HTTP_400_BAD_REQUEST)
@@ -903,7 +1001,7 @@ class UserViewSet(LoggingMixin, viewsets.ViewSet):
         """
         serializer = ClaimCodeAccountSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-                 
+           
         # Validate claim code format/prefix
         account_claim_code = serializer.validated_data.pop('claim_code')
         registration = get_registration_for_claim_code(account_claim_code)
@@ -1067,11 +1165,14 @@ class AwardViewSet(LoggingMixin, viewsets.GenericViewSet,
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = Award.objects.filter(user=self.request.user)
+        if self.action == 'verify':
+            qs = Award.objects.all()
+        else:
+            qs = Award.objects.filter(user=self.request.user)
 
-        if self.action == 'list':
-            # Do not filter by is_deleted since Entries might need access
-            qs = qs.order_by(F('issued_date').desc(nulls_first=True))
+            if self.action == 'list':
+                # Do not filter by is_deleted since Entries might need access
+                qs = qs.order_by(F('issued_date').desc(nulls_first=True))
 
         return qs
 
@@ -1111,6 +1212,27 @@ class AwardViewSet(LoggingMixin, viewsets.GenericViewSet,
 
         return Response(AwardSerializer(instance).data)
 
+    @detail_route(methods=['get'], permission_classes=[AllowAny])
+    def verify(self, request, pk=None):
+        """Verify awarded badge and update verification timestamp and revoked state."""
+        instance = self.get_object()
+        
+        if instance.assertion_url:
+            try:
+                assertion.verify(instance.assertion_url)
+                
+                instance.verified_dt = timezone.now()
+                instance.save()                
+            except assertion.AssertionRevokedException as ae:
+                instance.verified_dt = timezone.now()
+                instance.revoked = True
+                instance.revoked_reason = str(ae)
+                instance.save()
+            except Exception as e:
+                raise APIException(str(e))
+                
+        return Response(AwardVerifySerializer(instance).data)
+    
     @list_route(methods=['post'])
     def push(self, request):
         handle_award_push(request, request.data)
@@ -1118,22 +1240,22 @@ class AwardViewSet(LoggingMixin, viewsets.GenericViewSet,
     
     @list_route(methods=['post'])
     def upload(self, request):
-# DEBUG
-        from pprint import pprint as pp
-        print 'UPLOAD()'
         uploaded_file = request.data['file']
-        
+
         # Verify assertion content
         try:
             assertion_version = assertion.verify(uploaded_file)
+        except assertion.AssertionRevokedException as ae:
+            return Response(str(ae), status=status.HTTP_410_GONE)
         except Exception as e:
             raise APIException('Unable to verify badge assertion.')
 
         if assertion_version not in assertion.ALLOW_VERSIONS:
             raise APIException('Unknown badge assertion version "%s".' % assertion_version)
 
-# DEBUG        
-        print '* ASSERTION IS VALID', assertion_version
+        if settings.DEBUG:     
+            print 'api.views.upload(), assertion is valid', assertion_version
+            
         # Read raw content
         try:
             uploaded_file.seek(0)
@@ -1147,14 +1269,16 @@ class AwardViewSet(LoggingMixin, viewsets.GenericViewSet,
         try:
             parsed_data = assertion.parse(assertion_content, assertion_version)
         except Exception as e:
+            if settings.DEBUG:
+                traceback.print_exc()
             raise APIException(e.message)   
                 
         # Verify this user is the recipient
-# DEBUG
-        print '* VERIFYING RECIPIENT'
+        if settings.DEBUG:
+            print 'api.views.upload(), verifying recipient'
+            
         email_list = UserEmail.objects.filter(user=request.user, is_validated=True)\
             .values_list('email', flat=True)
-        print email_list
 
         try:
             student_email = assertion.verify_recipient(parsed_data.get('recipient'), email_list)
@@ -1168,6 +1292,7 @@ class AwardViewSet(LoggingMixin, viewsets.GenericViewSet,
     
         parsed_data['student_name'] = request.user.get_full_name()
         parsed_data['student_email'] = student_email
+        parsed_data['verified_dt'] = timezone.now()
         
         # Save award
         award = handle_award_push(request, parsed_data)
@@ -1335,10 +1460,7 @@ class EntryViewSet(LoggingMixin, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_serializer_class(self):
-        if self.action == 'create':
-            return EntryPostSerializer
-
-        if self.action == 'partial_update':
+        if self.action == 'create' or self.action == 'partial_update':
             return EntryPostSerializer
 
         return EntrySerializer
@@ -1402,11 +1524,48 @@ class EntryViewSet(LoggingMixin, viewsets.ModelViewSet):
         if settings.DEBUG:
             print 'json_response', json_response
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        instance = serializer.save()
+    def _update_tags(self, instance, tag_name_list):
+        """Update instance `tags` and return instance."""
+        tag_list = []
 
+        for name in tag_name_list:
+            try:
+                tag = Tag.objects.get(user=instance.user, name=name, type=Tag.ENTRY)
+            except Tag.DoesNotExist:
+                tag = Tag.objects.create(user=instance.user, name=name, type=Tag.ENTRY)
+
+            tag_list.append(tag)
+
+        instance.tags.set(tag_list)        
+        return instance
+
+    def create(self, request, *args, **kwargs):  
+        # Handle tags separately  
+        tag_name_list = request.data.pop('tags', None)
+        if tag_name_list and not isinstance(tag_name_list, list):
+            raise ValidationError('Expected "tags" as list of names')
+
+        # We need to handle the case where app thinks entry was not saved, but it was.
+        # `serializer.save()` calls `.create()` or `.update()` depending on whether
+        # or not there is an `.instance`.  `.create()` ignores attachments, which is 
+        # what we want, so pass special kwarg to `.save()`.
+        instance = None
+        
+        id = request.data.get('id')
+        if id:
+            try:
+                instance = Entry.objects.get(pk=id)    
+            except Entry.DoesNotExist:
+                pass
+                
+        serializer = self.get_serializer(instance, data=request.data)
+        serializer.is_valid(raise_exception=True)
+                
+        instance = serializer.save(ignore_attachments=True)
+
+        if tag_name_list:
+            instance = self._update_tags(instance, tag_name_list)
+            
         # If this is a pledge, send to FP
         if instance.award and instance.award.event:
             self._send_pledge(request, instance)
@@ -1416,12 +1575,21 @@ class EntryViewSet(LoggingMixin, viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
+        # Handle tags separately  
+        tag_name_list = request.data.pop('tags', None)
+        if tag_name_list and not isinstance(tag_name_list, list):
+            raise ValidationError('Expected "tags" as list of names')
+
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
 
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
+        
         instance = serializer.save()
+
+        if tag_name_list:
+            instance = self._update_tags(instance, tag_name_list)
 
         # If this is a pledge, send to FP
         if instance.award and instance.award.event:
@@ -1429,9 +1597,9 @@ class EntryViewSet(LoggingMixin, viewsets.ModelViewSet):
 
         return Response(
             EntrySerializer(instance, context=self.get_serializer_context()).data)
-
+               
     def destroy(self, request, pk=None):
-        """Override to flag as deleted and destroy related shares"""
+        """Override to flag as data deleted and destroy related shares"""
         instance = self.get_object()
         instance.is_deleted = True
         instance.save()
@@ -1473,31 +1641,21 @@ class EntryViewSet(LoggingMixin, viewsets.ModelViewSet):
 
         return Response(
             EntrySerializer(new_instance, context=self.get_serializer_context()).data)
-
+                  
     @detail_route(methods=['post'])
     def tags(self, request, pk=None):
         """
         Set list of tags on `Entry`
-        Expects a list of tag names as request data
+        Expects a list of tag names as request data.
         """
         instance = self.get_object()
-        name_list = request.data
+        tag_name_list = request.data
 
-        if not isinstance(name_list, list):
+        if not isinstance(tag_name_list, list):
             raise ValidationError('Expected list of tag names')
 
-        tag_list = []
-
-        for name in name_list:
-            try:
-                tag = Tag.objects.get(user=request.user, name=name, type=Tag.ENTRY)
-            except Tag.DoesNotExist:
-                tag = Tag.objects.create(user=request.user, name=name, type=Tag.ENTRY)
-
-            tag_list.append(tag)
-
-        instance.tags.set(tag_list)
-
+        instance = self._update_tags(instance, tag_name_list)
+        
         return Response(
             EntrySerializer(instance, context=self.get_serializer_context()).data)
 
@@ -1514,6 +1672,7 @@ class AttachmentViewSet(LoggingMixin, viewsets.GenericViewSet,
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
         instance = serializer.save()
 
         return Response(

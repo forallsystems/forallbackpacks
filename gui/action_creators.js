@@ -1,14 +1,8 @@
 import * as constants from './constants';
 import 'babel-polyfill'
 import fetch from 'isomorphic-fetch';
+import moment from 'moment';
 
-// for testing
-function uuid4() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random()*16|0, v = c == 'x' ? r : (r&0x3|0x8);
-        return v.toString(16);
-    });
-}
 
 // Thrown error is one of the following:
 // {status: 400, statusText: 'Bad Request', detail: {...}}
@@ -25,19 +19,32 @@ function processResponse(response) {
                 }
             })
         );
-        //return Promise.resolve(response.json());
     } 
-    
+        
     // Handle internal API errors
     if(response.status == 400) {               
         return response.json().then(json => {
-            console.log('JSON', typeof(json), json);
+            console.debug('JSON', typeof(json), json);
             if(typeof(json) == 'string') {
                 throw {status: 400, statusText: json};
             } else if(typeof(json.detail) == 'string') {
                 throw {status: 400, statusText: json.detail};
             } else {
                 throw {status: 400, statusText: response.statusText, detail: json.detail};
+            }
+        });
+    }
+    
+    // Handle 410 badge revocation
+    if(response.status == 410) {
+        return response.json().then(json => {
+            console.debug('JSON', typeof(json), json);
+            if(typeof(json) == 'string') {
+                throw {status: 410, statusText: json};
+            } else if(typeof(json.detail) == 'string') {
+                throw {status: 410, statusText: json.detail};
+            } else {
+                throw {status: 410, statusText: response.statusText, detail: json.detail};
             }
         });
     }
@@ -56,7 +63,28 @@ export function fetchGetJSON(url) {
                 'Authorization': 'Bearer '+token
             }
         })
-        .then(processResponse);
+        .then((response) => {
+            // Handle unauthorized, try to refresh token expiration
+            if(response.status == 403) {
+                return fetch(constants.AUTH.refreshTokenUrl+token+'/')
+                    .then((r) => {
+                        if(r.ok) {
+                            return fetch(url, {
+                                method: 'GET',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer '+token
+                                }
+                            }).then(processResponse);
+                        }
+                        
+                        return processResponse(response);
+                    });
+            } 
+            
+            return processResponse(response);
+        });
     });
 }
 
@@ -71,7 +99,29 @@ export function fetchPostJSON(url, data) {
             },
             body: JSON.stringify(data)
         })
-        .then(processResponse);
+        .then((response) => {
+            // Handle unauthorized, try to refresh token expiration
+            if(response.status == 403) {
+                return fetch(constants.AUTH.refreshTokenUrl+token+'/')
+                    .then((r) => {
+                        if(r.ok) {
+                            return fetch(url, {
+                                method: 'POST',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer '+token
+                                },
+                                body: JSON.stringify(data)
+                            }).then(processResponse);
+                        }
+                        
+                        return processResponse(response);
+                    });
+            }
+            
+            return processResponse(response);        
+        });
     });
 }
 
@@ -86,7 +136,28 @@ export function fetchPostFormData(url, formData) {
             },
             body: formData
         })
-        .then(processResponse);
+        .then((response) => {
+            // Handle unauthorized, try to refresh token expiration
+            if(response.status == 403) {
+                return fetch(constants.AUTH.refreshTokenUrl+token+'/')
+                    .then((r) => {
+                        if(r.ok) {
+                            return fetch(url, {
+                                method: 'POST',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'Authorization': 'Bearer '+token
+                                },
+                                body: formData
+                            }).then(processResponse);
+                        }
+                        
+                        return processResponse(response);
+                    });
+            }
+            
+            return processResponse(response);        
+        });
     });
 }
 
@@ -101,7 +172,29 @@ export function fetchPatchJSON(url, data) {
             },
             body: JSON.stringify(data)
         })
-        .then(processResponse);
+        .then((response) => {
+            // Handle unauthorized, try to refresh token expiration
+            if(response.status == 403) {
+                return fetch(constants.AUTH.refreshTokenUrl+token+'/')
+                    .then((r) => {
+                        if(r.ok) {
+                            return fetch(url, {
+                                method: 'PATCH',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer '+token
+                                },
+                                body: JSON.stringify(data)
+                            }).then(processResponse);
+                        }
+                        
+                        return processResponse(response);
+                    });
+            }
+            
+            return processResponse(response);        
+        });
     });
 }
 
@@ -116,7 +209,28 @@ export function fetchDeleteJSON(url) {
             }
 
         })
-        .then(processResponse);
+        .then((response) => {
+            // Handle unauthorized, try to refresh token expiration
+            if(response.status == 403) {
+                return fetch(constants.AUTH.refreshTokenUrl+token+'/')
+                    .then((r) => {
+                        if(r.ok) {
+                            return fetch(url, {
+                                method: 'DELETE',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'Content-Type': 'application/json',
+                                    'Authorization': 'Bearer '+token
+                                }
+                            }).then(processResponse);
+                        }
+                        
+                        return processResponse(response);
+                    });
+            }
+            
+            return processResponse(response);        
+        });
     });
 }
 
@@ -148,6 +262,17 @@ export function addAward(json) {
 // Dispatch when award tags updated
 export function updateAwardTags(id, tags) {
     return {type: 'UPDATE_AWARD_TAGS', id: id, tags: tags};
+}
+
+// Dispatch after verifying award status
+export function updateAwardStatus(id, verified_dt, revoked, revoked_reason) {
+    return {
+        type: 'UPDATE_AWARD_STATUS', 
+        id: id, 
+        verified_dt: verified_dt,
+        revoked: revoked,
+        revoked_reason: revoked_reason
+    };
 }
 
 // Dispatch when award deleted
@@ -214,11 +339,11 @@ function loadStateError(error) {
     return {type: 'LOAD_STATE_ERROR', error: error};
 }
 
-function loadStateSuccess(json) {
-    return {type: 'LOAD_STATE_SUCCESS'}; 
+function loadStateSuccess(lastSync) {
+    return {type: 'LOAD_STATE_SUCCESS', lastSync: lastSync}; 
 }
 
-function fetchUser(throwError) {
+function fetchUser(dispatchError) {
     return function(dispatch, getState) {
         dispatch({type: 'FETCH_USER_START'});
         
@@ -228,15 +353,12 @@ function fetchUser(throwError) {
             })
             .catch((error) => {
                 error.action = 'Error fetching user';
-                
-                if(throwError) {
-                    throw error;
-                }
+                throw error;
             });
     }
 }
 
-function fetchTags() {
+function fetchTags(dispatchError) {
     return function(dispatch, getState) {
         dispatch({type: 'FETCH_TAGS_START'});
     
@@ -251,7 +373,7 @@ function fetchTags() {
     }
 }
 
-function fetchAwards(throwError) {
+function fetchAwards(dispatchError) {
     return function(dispatch, getState) {
         dispatch({type: 'FETCH_AWARDS_START'});
                 
@@ -262,19 +384,21 @@ function fetchAwards(throwError) {
             .catch(error => {
                 error.action = 'Error fetching awards';
 
-                dispatch({
-                    type: 'FETCH_AWARDS_ERROR', 
-                    error: error.action+': '+error.statusText
-                });
-                
-                if(throwError) {
-                    throw error;
+                if(dispatchError) {
+                    dispatch({
+                        type: 'FETCH_AWARDS_ERROR', 
+                        error: error.action+': '+error.statusText
+                    });
+                } else {
+                    dispatch({type: 'FETCH_AWARDS_END'});
                 }
+                
+                throw error;
             });
     }
 }
 
-function fetchEntries(throwError) {
+function fetchEntries(dispatchError) {
     return function(dispatch, getState) {
         dispatch({type: 'FETCH_ENTRIES_START'});
                 
@@ -285,19 +409,21 @@ function fetchEntries(throwError) {
             .catch(error => {
                 error.action = 'Error fetching entries';
 
-                dispatch({
-                    type: 'FETCH_ENTRIES_ERROR', 
-                    error: error.action+': '+error.statusText
-                });
-                
-                if(throwError) {
-                    throw error;
+                if(dispatchError) {
+                    dispatch({
+                        type: 'FETCH_ENTRIES_ERROR', 
+                        error: error.action+': '+error.statusText
+                    });
+                } else {
+                    dispatch({type: 'FETCH_ENTRIES_END'});
                 }
+                
+                throw error;
             });
     }
 }
 
-function fetchShares(throwError) {
+function fetchShares(dispatchError) {
     return function(dispatch, getState) {
         dispatch({type: 'FETCH_SHARES_START'});
                 
@@ -308,14 +434,16 @@ function fetchShares(throwError) {
             .catch(error => {
                 error.action = 'Error fetching shares';
 
-                dispatch({
-                    type: 'FETCH_SHARES_ERROR', 
-                    error: error.action+': '+error.statusText
-                });
-                
-                if(throwError) {
-                    throw error;
+                if(dispatchError) {
+                    dispatch({
+                        type: 'FETCH_SHARES_ERROR', 
+                        error: error.action+': '+error.statusText
+                    });
+                } else {
+                    dispatch({type: 'FETCH_SHARES_END'});
                 }
+                
+                throw error;
             });
     }
 }
@@ -325,36 +453,32 @@ function setState(state) {
 }
 
 export function loadState(defaultState) {    
-    return function(dispatch, getState) {                 
+    return function(dispatch, getState) {      
         localforage.getItem('state').then(function(value) {
-            if(value) {
-                dispatch(setState(value));
+            var cachedState = value || defaultState;
+            
+            if(cachedState.loaded) {
+                console.log('loadState', 'using cached state');
+                dispatch(setState(cachedState));
+                dispatch(loadStateSuccess(cachedState.lastSync)); 
                 
-                if(value.loaded) {
-                    dispatch(loadStateSuccess());
-                  
-                    // Reload awards, entries, shares
-                    if(window.performance.navigation.type == 1) {  
-                        dispatch(fetchUser(false));
-                        dispatch(fetchAwards(false));
-                        dispatch(fetchEntries(false));
-                        dispatch(fetchShares(false));
-                    }                    
-                    return; // we're done
+                if(cachedState.isOffline) {
+                    return; // We're done
                 }
             } else {
+                console.log('loadState', 'using default state');
                 dispatch(setState(defaultState));
             }
-                       
+
             Promise.all([
-                fetchUser(true)(dispatch, getState),
-                fetchTags()(dispatch, getState),
-                fetchAwards(true)(dispatch, getState),
-                fetchEntries(true)(dispatch, getState),
-                fetchShares(true)(dispatch, getState),
-                // add more here           
+                fetchUser(!cachedState.loaded)(dispatch, getState),
+                fetchTags(!cachedState.loaded)(dispatch, getState),
+                fetchAwards(!cachedState.loaded)(dispatch, getState),
+                fetchEntries(!cachedState.loaded)(dispatch, getState),
+                fetchShares(!cachedState.loaded)(dispatch, getState),        
             ]).then(() => {  
-                dispatch(loadStateSuccess()); 
+                console.log('loadState success');
+                dispatch(loadStateSuccess(moment.utc().format())); 
                 /* If we needed 2-stage loading, this is how we'd do it...          
                 Promise.all([
                     fetchAwards()(dispatch, getState)
@@ -367,11 +491,11 @@ export function loadState(defaultState) {
                 });   
                 */             
             }).catch((error) => {
+                console.error('loadState error', error);
+               
                 if(error.status == 401 || error.status == 403) {
-                    console.error('Caught unauthorized error');
                     dispatch(authorize());
-                } else {
-                    console.error('Caught error', error);
+                } else if(!cachedState.loaded) {                  
                     dispatch(loadStateError(error.action+': '+error.statusText));
                 }
             });
@@ -380,6 +504,26 @@ export function loadState(defaultState) {
             dispatch(loadStateError('Error loading state: '+error.message));        
         });
     }
+}
+
+// Offline mode
+export function setIsOffline(isOffline) {
+    return {type: 'SET_IS_OFFLINE', isOffline: isOffline}
+}
+
+// Dispatch when award synced
+export function syncedAward(json) {
+    return {type: 'SYNCED_AWARD', json: json};
+}
+
+// Dispatch when entry synced
+export function syncedEntry(json) {
+    return {type: 'SYNCED_ENTRY', json: json};
+}
+
+// Dispatch when sync successfully completed
+export function syncSuccess(lastSync) {
+    return {type: 'SYNC_SUCCESS', lastSync: lastSync};
 }
 
 // Logout

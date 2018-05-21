@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}{% load custom_tags %}
+{% block title %}Login{% endblock %}
+{% block custom_head_content %}
+<style>a {text-decoration:underline;}</style>
+{% endblock %}
+{% block content %}
+  <br/>
+  <form method="post" action="{% url 'issuerjs_save' %}" >
+    {% csrf_token %}
+
+
+
+    {% for badge in badgeList %}
+      <img src='{{badge.badge_image}}' width='100' height='100'/><br/><br/>
+      <p style="line-height:1.7em;">
+      <b>Recipient:</b> {{badge.student_email}}<br/>
+      <b>Name:</b> {{badge.badge_name}}<br/>
+      <b>Description:</b> {{badge.badge_description}}<br/>
+      <b>Criteria:</b> {{badge.badge_criteria|urlize|url_target_blank}}<br/>
+      <b>Issuer:</b> {{badge.issuer_org_name}} (<a href="{{badge.issuer_org_url}}" target="_blank">{{badge.issuer_org_url}}</a>)<br/>
+      </p>
+      <br/>
+
+    {% endfor %}
+
+
+    Accept {% if badgeList|length == 1 %}this badge{%else%}these badges{%endif%}?&nbsp;&nbsp;<input type="submit" class="btn btn-raised btn-warning" value="Yes" /> <input onclick="javascript:document.location.href='/issuerjs/cancel/'" type="button" class="btn btn-raised btn-danger" value="No" />
+
+
+  </form>
+
+
+
+{% endblock %}

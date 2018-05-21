@@ -1,0 +1,65 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Login{% endblock %}
+{% block custom_head_content %}
+<style>a {text-decoration:underline;}</style>
+{% endblock %}
+{% block content %}
+  <br/>
+  <form method="post" action="{% url 'issuerjs_login' %}" onsubmit="handleLogin()">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}" />
+    <input type="hidden" name="client_id" value="{{ client_id }}" />
+
+    <div class="alert alert-success" role="alert">You are about to send {{request.session.ASSSERTION_LIST|length}} badge{{ request.session.ASSSERTION_LIST|length|pluralize }} to your backpack.</div>
+
+    {% if form.errors %}
+    <div class="alert alert-danger" role="alert">{{form.non_field_errors.0|safe}}</div>
+
+    {% endif %}
+
+    {% if next %}
+        {% if user.is_authenticated %}
+        <p>Your account doesn't have access to this page. To proceed,
+        please login with an account that has access.</p>
+        {% endif %}
+    {% endif %}
+
+    <div class="form-group">
+        <div>
+            <input type="text" name="username" id="id_username" autofocus="" required="" class="form-control" maxlength="254" placeholder="Email Address"/>
+        </div>
+    </div>
+    <div class="form-group">
+        <div>
+          <input type="password" name="password" required="" class="form-control" id="id_password" placeholder="Password"/>
+        </div>
+    </div>
+
+    <input type="submit" class="btn btn-raised btn-warning" value="login" style="width:300px;"/>
+
+    <br/>
+      <a href="{% url 'password_reset' %}" target="_blank">Forgot your password?</a><br/><br/>
+      <p>Don't have an account yet?  <a href="{% url 'register' %}?next={{ register_next }}" target="_blank">Sign Up!</a></p>
+  </form>
+
+  <script language="javascript">
+    function handleLogin() {
+    	if ($('#remember').is(':checked')) {
+    		Cookies.set('username', $('#id_username').val(), { expires: 14 });
+    		Cookies.set('remember', true, { expires: 14 });
+    	} else {
+        Cookies.remove('username');
+        Cookies.remove('remember');
+      }
+    }
+
+    $(document).ready(function() {
+      var remember = Cookies.get('remember');
+      if ( remember == 'true' ) {
+      	$('#id_username').val(Cookies.get('username'));
+      	$('#remember').attr('checked','checked');
+      }
+    });
+  </script>
+
+{% endblock %}

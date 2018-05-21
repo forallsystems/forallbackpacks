@@ -9,6 +9,10 @@ background-size: cover;
 
 }
 
+footer {
+  margin-top:0;
+}
+
 .feature {
   background-color: #5cb984;
   text-align:center;
@@ -17,19 +21,31 @@ background-size: cover;
   -moz-background-size: cover;
   -o-background-size: cover;
   background-size: cover;
-  padding-bottom:100px;
+  padding-bottom:30px;
+  padding-left:10px;padding-right:10px;
+  border-bottom:10px solid #f1f1f1;
 }
 
 .featureLogo {
-  width:500px;
+  max-width:70%;
+}
+
+.featureDevices {
+  max-width:90%;
+  margin: 0 auto;
+  margin-top:30px;
+
+}
+.featureLogo {
+
   margin:0 auto;
-  margin-top:50px;
+  margin-top:30px;
 }
 
 .feature a {
   padding:10px;
   display:inline-block;
-  width:200px;
+  width:150px;
   border-radius:10px;
   font-size:1.6em;
 }
@@ -59,10 +75,77 @@ padding:0px 50px;
 }
 
 .feature p {
-  padding-top:50px;
-  font-size:1.4em;
-  font-weight:bold;
+  padding-top:30px;
+  font-size:1.3em;
+  display:inline-block;
   color:#fff;
+}
+
+.integrations {
+  padding:0px 0px;
+}
+
+.issuers {
+  padding:30px 40px;
+  background-color:#60c187;
+  color:#fff;
+}
+
+
+.leaners {
+  padding:30px 40px;
+  background-color:#f1f1f1;
+}
+
+.leaners h2, .issuers h2 {
+
+  font-weight:bold;
+  margin-bottom:35px;
+  font-size: 2.5em;
+}
+
+.thumbnail:hover .zoomIcon {
+  background-color:#ea5333;
+  opacity:1;
+}
+
+.zoomIcon {
+  position:relative;
+  background-color:#000;
+  color:#fff;
+  width:30px;
+  height:30px;
+  opacity:.5;
+  float:right;
+  margin-top:-30px;
+  font-size:1.4em;
+}
+
+.caption {
+  margin-bottom:50px;
+}
+
+.lb-data .lb-caption {
+
+  font-size: 1.8em;
+}
+
+.bottom {
+  font-family:Bitter;
+  background-color:#1f2c41;
+  color:#fff;
+  padding-top:35px;
+  padding-bottom:35px;
+}
+
+.bottom h1 {
+  font-size:2.6em;
+  font-family:Bitter;
+}
+
+.bottom img {
+  vertical-align:middle;
+  padding-bottom:10px;
 }
 
 .appColumn {
@@ -103,6 +186,7 @@ padding:0px 50px;
   font-weight:400;
   margin-top:5px;;
   margin-bottom:0;
+  font-size: 1.6em;
 }
 
 .appColumn h2 em {
@@ -149,6 +233,12 @@ padding:0px 50px;
 h3 {
   margin-top:0;
 }
+
+.form-control, .form-group .form-control {
+-webkit-background-size: 0 2px,100% 2px;
+background-size: 0 2px,100% 2px;
+}
+
 
 form {
 width:400px;
@@ -264,10 +354,87 @@ text-align:left;
   .feature p {
     padding-top:10px;
     line-height:1em;
+    font-size:1.1em;
+  }
+
+  .feature p img {
+    width:40px !important;
+    margin-top:-5px !important;
   }
 
   footer .text-right {
     text-align:left;
   }
+
+}
+
+@media only screen and (max-width: 767px) {
+
+
+
+  .appColumn {
+    font-size:.8em;
+  }
+  .appColumn div {
+    padding:10px;
+  }
+
+  .appColumn h2 {
+    font-size:1em;
+  }
+
+}
+
+@media only screen and (max-width: 767px) and (orientation: portrait) {
+
+
+  .bottom {
+    padding-top:0px;
+    padding-bottom:40px;
+  }
+
+
+
+
+  .appColumn {
+    width:100%;
+    float:none;
+    border-bottom:1px solid #eee;
+  }
+
+  .appColumn {
+    font-size:1.1em;
+    border-right:none;
+  }
+
+  .appColumn h2 {
+    font-size:1.6em;
+  }
+
+  .appColumn img {
+    width:100px;
+    height:100px;
+    margin-top:20px;
+  }
+
+
+
+  .bottom {
+    padding-top:15px;
+    padding-bottom:15px;
+  }
+
+  .bottom h1 {
+  font-size:1.6em;
+
+  }
+
+  .bottom img {
+    width:30px;
+  }
+
+  .farApp { padding-left:0; }
+
+
 
 }

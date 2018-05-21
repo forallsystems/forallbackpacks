@@ -203,6 +203,37 @@ a.filter-section-toggle[aria-expanded="true"]:before {
   cursor: pointer;
 }
 
+/* offlineStatusBarContainer is fixed position; stretch to fill content area */
+.offlineStatusBarContainer {    /* col-xs-12 */
+    position: fixed;
+    bottom: 69px;   /* clear NavFooter */
+    width: 100%;
+}
+
+/* boostrap-custom sm breakpoint @ 850px vs 768px */  
+@media (min-width: 850px) {     
+    /* col-sm-offset-5, col-sm-7 */   
+    .offlineStatusBarContainer  {
+        bottom: 0;  /* no NavFooter */
+        width: calc(58.33333333% - 30px);
+    }
+}
+
+@media (min-width: 992px) {     
+    /* col-md-offset-4, col-md-8 */
+    .offlineStatusBarContainer  {
+        width: calc(66.66666667% - 30px);
+    }
+}
+
+@media (min-width: 1200px) {    
+    /* col-lg-offset-3, col-lg-9 */
+    .offlineStatusBarContainer  {
+        width: calc(75% - 30px);
+    }
+}
+
+
 /* filterable content display */
 
 /* filterBarContainer is fixed position; mimic width of contentContainer classes:
@@ -220,7 +251,8 @@ a.filter-section-toggle[aria-expanded="true"]:before {
     margin-right: 19px;
 }
 
-@media (min-width: 768px) {
+/* boostrap-custom sm breakpoint @ 850px vs 768px */
+@media (min-width: 850px) {
     .filterBarContainer {
         margin-left: 15px;
         width: calc(58.33333333% - 30px);
@@ -322,7 +354,8 @@ p { font-size:1.1em; }
     }
 }
 
-@media (max-width: 767px) {
+/* boostrap-custom sm breakpoint @ 850px vs 768px */
+@media (max-width: 849px) {
     /* override timeline.css, leave room for FilterBar+NavFooter on small devices */
     .tl-timeline {
         height: -webkit-calc(100% - 110px);
@@ -340,12 +373,13 @@ p { font-size:1.1em; }
         margin-right: -2px;
     }
 
-    #attachment-popover {
+    #attachment-popover, #unsynced-attachment-popover {
       margin-top:42px;
     }
 }
 
-@media (min-width: 768px) {
+/* boostrap-custom sm breakpoint @ 850px vs 768px */
+@media (min-width: 850px) {
     /* override timeline.css, leave room for FilterBar on small devices */
     .tl-timeline {
         height: -webkit-calc(100% - 40px);
@@ -373,7 +407,7 @@ p { font-size:1.1em; }
       padding-top: 48px; /* clear FilterBar */
     }
 
-    #attachment-popover {
+    #attachment-popover, #unsynced-attachment-popover {
       margin-top:64px;
     }
 }
@@ -439,7 +473,8 @@ p { font-size:1.1em; }
 }
 
 /* Small Devices, Tablets */
-@media only screen and (min-width : 768px) {
+/* boostrap-custom sm breakpoint @ 850px vs 768px */
+@media only screen and (min-width : 850px) {
   .sidebarContent {
     min-height: 700px;
   }
@@ -452,7 +487,7 @@ p { font-size:1.1em; }
   }
 
   #award-list-popover {
-    margin-top:50px;
+    margin-top:65px;
   }
 
 }

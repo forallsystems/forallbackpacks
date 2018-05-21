@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}No Badges Sent{% endblock %}
+{% block custom_head_content %}
+<style>a {text-decoration:underline;}</style>
+{% endblock %}
+{% block content %}
+  <br/>
+  <form method="post" action="" >
+    <div class="alert alert-success" role="alert">You didn't add any open badges to your backpack.
+    <a href="https://www.forallbackpacks.com/" target="_blank">Visit your backpack</a> to manage and share your open badges.</div>
+    {% if request.session.EMBED%}
+    <button type="button" onclick="parent.postMessage({'successes':[],'errors':[{% for a in request.session.ASSSERTION_LIST %}'{{a}}',{%endfor%}]}, '*');" class="btn btn-raised btn-warning"  >
+      Close
+    </button>
+    {%endif%}
+  </form>
+{% endblock %}

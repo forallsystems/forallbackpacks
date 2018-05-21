@@ -1,4 +1,4 @@
-import base64, hashlib, io, json, mimetypes, os, re, tempfile
+import base64, hashlib, io, json, mimetypes, os, re, tempfile, traceback
 from urlparse import urljoin, urlparse
 from xml.dom.minidom import parseString
 from wsgiref.util import FileWrapper
@@ -7,13 +7,14 @@ from django.forms.models import model_to_dict
 from django.http import HttpResponse, Http404, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.clickjacking import xframe_options_exempt
 from openbadges_bakery import png_bakery
 import png
 import requests
 from . import file_util
 from .decorators import logging_decorator
-from .models import Award, Evidence, Entry, Section, Attachment, Share
+from .models import Award, AwardEndorsement, Evidence, Entry, Section, Attachment, Share
 
 
 def truncate(s, max_len=256):
@@ -88,22 +89,75 @@ def _bake_svg(src_file, assertion_string, dst_file):
     dst_file.write(svg_doc.toxml('utf-8'))
     dst_file.seek(0)
     return dst_file
-  
+
+def get_assertion_endorser_json(request, award, awardendorsement):
+    """
+    Return endorser JSON for award
+    """
+    id = request.build_absolute_uri(
+        reverse('viewAssertionEndorser', kwargs={
+            'award_id': str(award.id),
+            'awardendorsement_id': str(awardendorsement.id)
+        })
+    )
+ 
+    json_data = {
+        '@context': 'https://w3id.org/openbadges/v2',
+        'id': id,
+        'type': 'Profile',
+        'name': awardendorsement.issuer_name,
+        'url': awardendorsement.issuer_url
+    }
+    
+    if awardendorsement.issuer_email:
+        json_data['email'] = awardendorsement.issuer_email
+    
+    if awardendorsement.issuer_image:
+        json_data['image'] = awardendorsement.issuer_image.url
+    
+    return json_data  
+
+def get_assertion_endorsement_json(request, award, awardendorsement):
+    """
+    Return endorsement JSON for award
+    """
+    id = request.build_absolute_uri(
+        reverse('viewAssertionEndorsement', kwargs={
+            'award_id': str(award.id),
+            'awardendorsement_id': str(awardendorsement.id)
+        })
+    )
+
+    claim_id = request.build_absolute_uri(
+        reverse('viewAssertion', kwargs={'award_id': str(award.id)})
+    )
+
+    return {
+        '@context': 'https://w3id.org/openbadges/v2',
+        'id': id,
+        'type': 'Endorsement',
+        'claim': {
+            'id': claim_id
+        },
+        'issuer': get_assertion_endorser_json(request, award, awardendorsement),
+        'issuedOn': awardendorsement.issued_on.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        'verification': {
+            'type': 'hosted'
+        }
+    }   
+      
 def get_assertion_issuer_json(request, award, version):
-    """Return assertion issuer JSON"""
+    """
+    Return assertion issuer JSON (for self-hosted assertions)
+    """
     award_id = str(award.id)
     
-    if award.assertion_url:
-        # External hosting
-        issuer_url = award.issuer_org_url
-    else:
-        # Internal hosting
-        issuer_url = request.build_absolute_uri(
-            reverse('viewAssertionIssuer', kwargs={'award_id':award_id})
-        )
-    
-        if version != '2.0':
-            issuer_url += '?v='+version
+    issuer_id = request.build_absolute_uri(
+        reverse('viewAssertionIssuer', kwargs={'award_id':award_id})
+    )
+
+    if version != '2.0':
+        issuer_id += '?v='+version
         
     if version == '0.5':
         return {
@@ -120,7 +174,7 @@ def get_assertion_issuer_json(request, award, version):
         return {
             '@context': 'https://w3id.org/openbadges/v1',
             'type': 'Issuer',
-            'id': issuer_url,
+            'id': issuer_id,
             'name': award.issuer_org_name,
             'url': award.issuer_org_url
         }  
@@ -128,7 +182,7 @@ def get_assertion_issuer_json(request, award, version):
          return {
             '@context': 'https://w3id.org/openbadges/v2',
             'type': 'Issuer',
-            'id': issuer_url,
+            'id': issuer_id,
             'name': award.issuer_org_name,
             'url': award.issuer_org_url,
             'email': award.issuer_org_email or 'info@forallbackpacks.com'
@@ -137,31 +191,22 @@ def get_assertion_issuer_json(request, award, version):
     raise Exception('Invalid version "%s"' % version)
                          
 def get_assertion_badge_json(request, award, version):
-    """Return assertion badge JSON"""
+    """Return assertion badge JSON (for self-hosted assertions)"""
     award_id = str(award.id)
 
-    if award.assertion_url:
-        # External hosting
-        badge_url = urljoin(award.assertion_url, 'view/')
-        issuer_url = request.build_absolute_uri(
-            reverse('viewAssertionIssuer', kwargs={'award_id':award_id})
-        )    
-        public_url = urljoin(award.assertion_url, 'view/')
-    else:
-        # Internal hosting
-        badge_url = request.build_absolute_uri(
-            reverse('viewAssertionBadge', kwargs={'award_id':award_id})
-        )
-        issuer_url = request.build_absolute_uri(
-            reverse('viewAssertionIssuer', kwargs={'award_id':award_id})
-        )    
-        public_url = request.build_absolute_uri(
-            reverse('viewBadge', kwargs={'award_id':award_id})
-        )
-    
-        if version != '2.0':
-            badge_url += '?v='+version
-            issuer_url += '?v='+version 
+    badge_url = request.build_absolute_uri(
+        reverse('viewAssertionBadge', kwargs={'award_id':award_id})
+    )
+    issuer_url = request.build_absolute_uri(
+        reverse('viewAssertionIssuer', kwargs={'award_id':award_id})
+    )    
+    public_url = request.build_absolute_uri(
+        reverse('viewBadge', kwargs={'award_id':award_id})
+    )
+
+    if version != '2.0':
+        badge_url += '?v='+version
+        issuer_url += '?v='+version 
 
     if version == '0.5':
         return {
@@ -218,7 +263,7 @@ def get_assertion_badge_json(request, award, version):
     raise Exception('Invalid version "%s"' % version)
    
 def get_assertion_json(request, award, version):
-    """Return assertion JSON"""    
+    """Return assertion JSON (for self-hosted assertions)"""    
     award_id = str(award.id)
 
     m = hashlib.sha256()
@@ -228,23 +273,22 @@ def get_assertion_json(request, award, version):
     if award.assertion_url:
         # External hosting
         assertion_url = award.assertion_url
-        badge_url = urljoin(assertion_url, 'view/')
-        public_url = urljoin(assertion_url, 'view/')
     else:
         # Internal hosting
         assertion_url = request.build_absolute_uri(
             reverse('viewAssertion', kwargs={'award_id':award_id})
         )
-        badge_url = request.build_absolute_uri(
-            reverse('viewAssertionBadge', kwargs={'award_id':award_id})
-        )
-        public_url = request.build_absolute_uri(
-            reverse('viewBadge', kwargs={'award_id':award_id})
-        )
         
-        if version != '2.0':
-            assertion_url += '?v='+version
-            badge_url += '?v='+version
+    badge_url = request.build_absolute_uri(
+        reverse('viewAssertionBadge', kwargs={'award_id':award_id})
+    )
+    public_url = request.build_absolute_uri(
+        reverse('viewBadge', kwargs={'award_id':award_id})
+    )
+    
+    if version != '2.0':
+        assertion_url += '?v='+version
+        badge_url += '?v='+version
 
     if version == '0.5':
         assertion = {
@@ -323,7 +367,9 @@ def get_assertion_json(request, award, version):
     else:
         raise Exception('Invalid version "%s"' % version)
     
-    # Build evidence
+    # Build evidence and endorsements
+    endorsement_list = []
+
     if version == '2.0':   
         evidence = []
         
@@ -352,6 +398,11 @@ def get_assertion_json(request, award, version):
                     'name': ev.label,
                     'description': ev.description
                 })
+        
+        for awardendorsement in award.awardendorsement_set.all():
+            endorsement_list.append(
+                get_assertion_endorsement_json(request, award, awardendorsement)
+            )
     else:
         evidence = None
         
@@ -367,11 +418,16 @@ def get_assertion_json(request, award, version):
         elif n_evidence > 1:
             assertion['evidence'] = public_url
     
-    if evidence:
-        assertion['evidence'] = evidence
-        
     if award.expiration_date:
         assertion['expires'] = award.expiration_date.isoformat()
+
+    if evidence:
+        assertion['evidence'] = evidence
+ 
+    if len(endorsement_list) > 1:
+        assertion['endorsement'] = endorsement_list
+    elif endorsement_list:
+        assertion['endorsement'] = endorsement_list[0]
               
     return assertion
 
@@ -393,6 +449,34 @@ def get_award_logo(request, award):
         return response_json.get('primary_logo', None)
     except:
         return None
+
+@logging_decorator
+def view_assertion_endorser(request, award_id, awardendorsement_id):
+    """Return assertion (award) endorsement JSON"""
+    try:
+        award = Award.objects.get(pk=award_id)
+        awardendorsement = AwardEndorsement.objects.get(pk=awardendorsement_id, award=award)
+        json_data = get_assertion_endorser_json(request, award, awardendorsement)
+        return JsonResponse(json_data)
+    except (Award.DoesNotExist, AwardEndorsement.DoesNotExist):
+        raise Http404()
+    except Exception as e:
+        traceback.print_exc()
+        return HttpResponse(status=400, reason=str(e))
+
+@logging_decorator
+def view_assertion_endorsement(request, award_id, awardendorsement_id):
+    """Return assertion (award) endorsement JSON"""
+    try:
+        award = Award.objects.get(pk=award_id)
+        awardendorsement = AwardEndorsement.objects.get(pk=awardendorsement_id, award=award)
+        json_data = get_assertion_endorsement_json(request, award, awardendorsement)
+        return JsonResponse(json_data)
+    except (Award.DoesNotExist, AwardEndorsement.DoesNotExist):
+        raise Http404()
+    except Exception as e:
+        traceback.print_exc()
+        return HttpResponse(status=400, reason=str(e))
  
 @logging_decorator
 def view_assertion_issuer(request, award_id):
@@ -426,6 +510,36 @@ def view_assertion(request, award_id):
     try:
         award = Award.objects.get(pk=award_id)
         version = request.GET.get('v', '2.0')
+        
+        # Handle revoked assertion
+        if award.revoked:
+            if award.assertion_url:
+                # External hosting
+                assertion_url = award.assertion_url
+            else:
+                # Internal hosting
+                assertion_url = request.build_absolute_uri(
+                    reverse('viewAssertion', kwargs={'award_id':award_id})
+                )
+                
+            json_data = {'revoked': True}         
+
+            if version == '2.0':
+                json_data.update({
+                    '@context': 'https://w3id.org/openbadges/v2',
+                    'id': assertion_url,
+                    'uid': award_id,   # deprecated
+                    'revocationReason': award.revoked_reason
+                })
+            elif version == '1.1':
+                json_data.update({
+                    '@context': 'https://w3id.org/openbadges/v1',
+                    'id': assertion_url,
+                    'uid': award_id
+                })
+            
+            return JsonResponse(json_data, status=410)
+                 
         json_data = get_assertion_json(request, award, version)
         return JsonResponse(json_data)
     except Award.DoesNotExist:
@@ -482,9 +596,35 @@ def download_badge(request, award_id):
 def view_badge(request, award_id):
     try:        
         award = get_award(award_id)
+        
         award_data = model_to_dict(award)
+        award_data['id'] = str(award.id)
         award_data['badge_image'] = award.badge_image.url
-        return render(request, "public_award_details.html", {'award': award_data})
+
+        evidence_list = []
+        for e in Evidence.objects.filter(award=award).order_by('created_date'):
+            data = model_to_dict(e)
+            data['file'] = e.file.url if e.file else None
+            evidence_list.append(data)
+
+        award_data['evidence'] = evidence_list
+ 
+        endorsement_list = []
+        for ae in AwardEndorsement.objects.filter(award=award):
+            data = model_to_dict(ae)
+            data['issuer_image'] = ae.issuer_image.url if ae.issuer_image else None
+            endorsement_list.append(data)
+        
+        award_data['endorsements'] = endorsement_list    
+
+        primary_logo = get_award_logo(request, award)
+           
+        return render(request, "public_award_details.html", {
+            'award': award_data,
+            'embed': 0,
+            'primary_logo': primary_logo,
+            'today': timezone.now().date()
+        })
     except Award.DoesNotExist:
         raise Http404()
 
@@ -500,26 +640,8 @@ def view_share(request, share_id):
     if embed == '0':
         embed = None
 
-    if isinstance(share.content_object, Award):        
-        award = share.content_object
-        award_data = model_to_dict(award)
-        award_data['badge_image'] = award.badge_image.url
-
-        evidence_list = []
-        for e in Evidence.objects.filter(award=award).order_by('created_date'):
-            data = model_to_dict(e)
-            data['file'] = e.file.url if e.file else None
-            evidence_list.append(data)
-
-        award_data['evidence'] = evidence_list
-
-        primary_logo = get_award_logo(request, award)
-
-        return render(request, "public_award_details.html", {
-            'award': award_data,
-            'embed': embed,
-            'primary_logo': primary_logo
-        })
+    if isinstance(share.content_object, Award): 
+        return view_badge(request, share.object_id)
 
     if isinstance(share.content_object, Entry):
         entry = share.content_object

@@ -20,6 +20,12 @@ header {
 
 /* MATERIAL DESIGN TWEAKS */
 
+.form-control, .form-group .form-control {
+-webkit-background-size: 0 2px,100% 2px;
+background-size: 0 2px,100% 2px;
+}
+
+
 .form-group input[type=file] {
   position:relative;
   opacity:1;

@@ -1,58 +1,145 @@
 <!DOCTYPE html>
-<html>
+<html manifest="cache.manifest">
 <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="ForallBackpack">
-    <meta name="application-name" content="ForAllBackpacks">
-    <meta name="viewport" content = "width = device-width, initial-scale = 1.0, minimum-scale = 1, maximum-scale = 1, user-scalable = no" />
-    <title>ForAllBackpacks</title>
-    <link rel="SHORTCUT ICON" href="img/favicon.ico">
-    <link rel="stylesheet" href="bootstrap/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="font-awesome/css/font-awesome.min.css">
-    <link rel="stylesheet" href="bootstrap-material-design/dist/css/bootstrap-material-design.min.css">
-    <link rel="stylesheet" href="bootstrap-material-design/dist/css/ripples.min.css">
-    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/css?family=Roboto:300,400,500,700">
-    <link rel="stylesheet" type="text/css" href="//fonts.googleapis.com/icon?family=Material+Icons">
-    <link rel="stylesheet" type="text/css" href="timeline2/css/timeline.css">
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ForallBackpack">
+<meta name="application-name" content="ForAllBackpacks">
+<meta name="viewport" content = "width = device-width, initial-scale = 1.0, minimum-scale = 1, maximum-scale = 1, user-scalable = no" />
+<title>ForAllBackpacks</title>
+<link rel="SHORTCUT ICON" href="img/favicon.ico">
 
-    <link rel="stylesheet" type="text/css" href="css/font-roboto.css">
-    <link rel="stylesheet" type="text/css" href="css/font-material-icons.css">
-    <link rel="stylesheet" href="css/forallbackpack.css">
+<link rel="stylesheet" type="text/css" href="font-awesome/css/font-awesome.min.css">
+<link rel="stylesheet" type="text/css" href="css/font-roboto.css">
+<link rel="stylesheet" type="text/css" href="css/font-material-icons.css">
 
-    <link rel="apple-touch-icon" href="img/apple-touch-icon-iphone.png">
-    <link rel="apple-touch-icon" sizes="76x76" href="img/touch-icon-ipad.png">
-    <link rel="apple-touch-icon" sizes="120x120" href="img/touch-icon-iphone-retina.png">
-    <link rel="apple-touch-icon" sizes="152x152" href="img/touch-icon-ipad-retina.png">
+<link rel="stylesheet" type="text/css" href="bootstrap-custom/css/bootstrap.min.css">
+<link rel="stylesheet" type="text/css" href="bootstrap-material-design/css/bootstrap-material-design.min.css">
+<link rel="stylesheet" type="text/css" href="bootstrap-material-design/css/ripples.min.css">
+<link rel="stylesheet" type="text/css" href="timeline2/css/timeline.css">
 
+<link rel="stylesheet" type="text/css" href="css/forallbackpack.css">
 
+<link rel="apple-touch-icon" href="img/apple-touch-icon-iphone.png">
+<link rel="apple-touch-icon" sizes="76x76" href="img/touch-icon-ipad.png">
+<link rel="apple-touch-icon" sizes="120x120" href="img/touch-icon-iphone-retina.png">
+<link rel="apple-touch-icon" sizes="152x152" href="img/touch-icon-ipad-retina.png">
 </head>
 <body>
-    <div id="root" class="container-fluid" style="height:100%;">
-    </div>
-    <script src="jquery/dist/jquery.min.js"></script>
-    <script src="bootstrap/dist/js/bootstrap.min.js"></script>
-    <script src="arrive/minified/arrive.min.js"></script>
-    <script src="bootstrap-material-design/dist/js/material.min.js"></script>
-    <script src="bootstrap-material-design/dist/js/ripples.min.js"></script>
-    <script src="localforage/dist/localforage.min.js"></script>
-    <script src="timeline2/js/timeline-min.js"></script>
-    <script src="timeline2/js/storyjs-embed.js"></script>
-    <script type="text/javascript" src="https://apis.google.com/js/client.js"></script>
-    <script src="js/urlize.js"></script>
-    <script src="js/bundle.js"></script>
-    <script type="text/javascript">
-        $.material.init();
 
-        // For 'View Details' links within Timeline slides
-        function timelineViewBadgeDetails(uid) {
-            var event = new CustomEvent('build', {'detail': {uid:uid}});
-            event.initEvent('timelineViewBadgeDetails', true, true);
-            document.dispatchEvent(event);
+<div id="root" class="container-fluid" style="height:100%;">
+</div>
+
+<div class="modal fade" id="cacheModal" data-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background-color:#04c086;color:#fff;padding-top:15px;padding-bottom:15px;">
+                <h4 class="modal-title">Updating Application</h4>
+            </div>
+            <div class="modal-body">
+                <p><b>Please wait while we update the application.</b></p>
+                <p id="cacheModalMsg" style="display:none;">0% Complete</p>
+                <div class="progress" style="height:8px;">
+                    <div class="progress-bar" id="cacheModalProgressBar" role="progressbar" 
+                        aria-valuemin="0" aria-valuemax="100" 
+                        aria-valuenow="0" style="width:0;">
+                    </div>               
+                </div>             
+            </div>        
+        </div>
+    </div>
+</div>
+
+<script src="js/jquery.min.js"></script>
+<script src="js/arrive.min.js"></script>
+<script src="js/localforage.min.js"></script>
+<script src="bootstrap-custom/js/bootstrap.min.js"></script>
+<script src="bootstrap-material-design/js/material.min.js"></script>
+<script src="bootstrap-material-design/js/ripples.min.js"></script>
+<script src="timeline2/js/timeline-min.js"></script>
+<script src="timeline2/js/storyjs-embed.js"></script>
+<script type="text/javascript" src="https://apis.google.com/js/client.js"></script>
+<script src="js/urlize.js"></script>
+<script src="js/bundle.js"></script>
+
+<script type="text/javascript">
+    $.material.init();
+
+    // CustomEvent polyfill for IE
+    (function () {
+      if ( typeof window.CustomEvent === "function" ) return false;
+
+      function CustomEvent ( event, params ) {
+            params = params || { bubbles: false, cancelable: false, detail: undefined };
+            var evt = document.createEvent( 'CustomEvent' );
+            evt.initCustomEvent( event, params.bubbles, params.cancelable, params.detail );
+            return evt;
         }
 
+        CustomEvent.prototype = window.Event.prototype;
 
-    </script>
+        window.CustomEvent = CustomEvent;
+    })();
+
+    // For 'View Details' links within Timeline slides
+    function timelineViewBadgeDetails(uid) {
+        var event = new CustomEvent('build', {'detail': {uid:uid}});
+        event.initEvent('timelineViewBadgeDetails', true, true);
+        document.dispatchEvent(event);
+    }
+    
+    var $cacheModal = $('#cacheModal');      
+    var $cacheModalMsg = $('#cacheModalMsg');  
+    var cacheModalProgressBar = document.getElementById('cacheModalProgressBar'); 
+    var cacheProgressCount = 0;
+    
+    // An update was found. The browser is fetching resources.
+    window.applicationCache.ondownloading = function() {
+        console.debug('applicationCache.ondownloading');
+        
+        $('.modal.in').modal('hide');
+        $cacheModal.modal('show');
+        return false;
+    };
+    
+    // Fired for each resource listed in the manifest as it is being fetched.
+    window.applicationCache.onprogress = function(e) {   	        
+        cacheProgressCount += 1;
+        
+        if (e && e.lengthComputable) {
+            // Progress event: compute percentage
+            n = Math.floor((100 * e.loaded) / e.total);
+            
+            cacheModalProgressBar.setAttribute('aria-valuenow', n);
+            cacheModalProgressBar.style.width = n+'%';
+        } else {
+             // Otherwise report # of times called
+             $cacheModalMsg.show().val(cacheProgressCount+' updated');
+        }
+        return false;
+    };
+
+    // Fired after the first cache
+    window.applicationCache.oncached = function() {
+        console.debug('applicationCache.oncached');
+        $cacheModal.modal('hide');           
+        return false;
+    };
+    
+    // Fired when the manifest resources have been newly redownloaded.
+    window.applicationCache.onupdateready = function() {
+        console.debug('applicationCache.onupdateready');
+        location.reload();
+        return false;
+    };
+
+    // Error
+    window.applicationCache.onerror = function() {
+        console.error('applicationCache.onerror');       
+        $cacheModal.modal('hide');           
+        return false;
+    }
+</script>
 </body>
 </html>

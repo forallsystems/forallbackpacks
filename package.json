@@ -15,9 +15,10 @@
   "homepage": "https://github.com/kavukattu/forallbackpack#readme",
   "scripts": {
     "start": "webpack-dev-server --env.production 0",
-    "build": "node_modules/.bin/webpack --env.production 1",
-    "build-staging": "node_modules/.bin/webpack --env.production 2",
-    "build-testing": "node_modules/.bin/webpack --env.production 3"
+    "build-dev": "node_modules/.bin/webpack --optimize-minimize --env.production dev",
+    "build": "node_modules/.bin/webpack --optimize-minimize --env.production 1",
+    "build-staging": "node_modules/.bin/webpack --optimize-minimize --env.production 2",
+    "build-testing": "node_modules/.bin/webpack --optimize-minimize --env.production 3"
   },
   "devDependencies": {
     "arrive": "^2.3.1",
@@ -28,7 +29,6 @@
     "babel-preset-react": "^6.24.1",
     "bootstrap": "^3.3.7",
     "bootstrap-material-design": "^0.5.10",
-    "copy-webpack-plugin": "^4.0.1",
     "css-loader": "^0.28.0",
     "es6-promise": "^4.1.0",
     "font-awesome": "^4.7.0",
@@ -59,8 +59,10 @@
     "redux-thunk": "^2.2.0",
     "sass-loader": "^6.0.5",
     "style-loader": "^0.16.1",
+    "uuid-random": "^1.0.6",
     "webpack": "^2.4.1",
-    "webpack-dev-server": "^2.4.4"
+    "webpack-dev-server": "^2.4.4",
+    "webpack-shell-plugin": "^0.5.0"
   },
   "dependencies": {}
 }

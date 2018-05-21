@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Success{% endblock %}
+{% block custom_head_content %}
+<style>a {text-decoration:underline;}</style>
+{% endblock %}
+{% block content %}
+  <br/>
+  <form method="post" action="" >
+    <div class="alert alert-success" role="alert">You've sent {{request.session.ASSSERTION_LIST|length}} badge{{ request.session.ASSSERTION_LIST|length|pluralize }} to your backpack!
+    <a href="https://www.forallbackpacks.com/" target="_blank">Visit your backpack</a> to manage and share your open badges.</div>
+    {% if request.session.EMBED%}
+    <button type="button" onclick="parent.postMessage({'successes':[{% for a in request.session.ASSSERTION_LIST %}'{{a}}',{%endfor%}],'errors':[]}, '*');" class="btn btn-raised btn-warning"  >
+      Close
+    </button>
+    {%endif%}
+  </form>
+{% endblock %}

@@ -26,6 +26,7 @@ class RegistrationForm(forms.ModelForm):
     class Media:
          js = ('forallbackpack/js/admin.js',)
 
+
 @admin.register(Registration)
 class RegistrationAdmin(admin.ModelAdmin):
     list_display = ('name', 'prefix', 'url', 'has_forall_permissions')
@@ -103,12 +104,21 @@ class EventAdmin(admin.ModelAdmin):
 
     def registration_name(self, instance):
         return instance.registration.name
+
+class AwardEndorsementInline(admin.StackedInline):
+    model = AwardEndorsement
+    extra = 0
     
 @admin.register(Award)
 class AwardAdmin(admin.ModelAdmin):
-    list_display = ('user', 'badge_name', 'org_issued_name', 'is_deleted',)
+    list_display = ('user', 'student_email', 'badge_name', 'org_issued_name', 'is_active',)
     list_display_links = ('user', 'badge_name', 'org_issued_name',)
     list_filter = ('is_deleted',)
+    inlines = [AwardEndorsementInline,]
+    
+    def is_active(self, instance):
+        return not instance.is_deleted
+    is_active.boolean = True
 
 @admin.register(Evidence)
 class EvidenceAdmin(admin.ModelAdmin):

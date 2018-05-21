@@ -11,7 +11,7 @@ export const AUTH = {
     authorizationUrl: SERVER_ROOT+'o/authorize/',
     accessTokenUrl: SERVER_ROOT+'o/token/',
     revokeTokenUrl: SERVER_ROOT+'o/revoke_token/',
-    verifyTokenUrl: SERVER_ROOT+'api/token/verify/',
+    refreshTokenUrl: SERVER_ROOT+'auth/refresh/',
     logoutUrl: SERVER_ROOT+'logout/',
 
     // append '?ref=...' for redirect after auth complete
@@ -33,8 +33,11 @@ export const AUTH = {
     }
 }
 
-
 export const API_ROOT = SERVER_ROOT+'api/';
+
+export const ATTACHMENT_ONLINE_BYTE_LIMIT = 50000000; //  per file
+
+export const ATTACHMENT_OFFLINE_BYTE_LIMIT = 8000000; //  per file
 
 // Must match UserProfile model
 export const NOTIFY_TYPE = {
@@ -50,6 +53,16 @@ export const TAG_TYPE = {
 }
 
 // Must match Share model
+export const SHARE_TYPE_LIST = [
+    'type_link',
+    'type_embed',
+    'type_facebook',
+    'type_twitter',
+    'type_pinterest',
+    'type_googleplus',
+    'type_linkedin'
+];
+
 export const SHARE_TYPE_NAME = {
     type_link: 'Public Link',
     type_embed: 'HTML Embed',
@@ -58,6 +71,16 @@ export const SHARE_TYPE_NAME = {
     type_pinterest: 'Pinterest',
     type_googleplus: 'Google Plus',
     type_linkedin: 'LinkedIn'
+}
+
+export const SHARE_TYPE_ICON_CLASS = {
+    type_link: 'fa fa-link',
+    type_embed: 'fa fa-code fa-lg',
+    type_facebook: 'fa fa-facebook-square fa-lg',
+    type_twitter: 'fa fa-twitter-square fa-lg',
+    type_pinterest: 'fa fa-pinterest-square fa-lg',
+    type_googleplus: 'fa fa-google-plus-square fa-lg',
+    type_linkedin: 'fa fa-linkedin-square fa-lg'
 }
 
 // Map path to info
@@ -85,28 +108,29 @@ export function PATH_INFO(path) {
 
     if(/^\/entry\/edit\//.test(path)) {
         return {title: 'Edit ePortfolio Entry', name: '', containerClass: 'entry-edit', 
-            hideMenu: true, editFooter: true};
+                editFooter: true};
     }
 
     if(/^\/entry\/view\//.test(path)) {
-        return {title: 'View ePortfolio Entry', name: '', containerClass: 'entry-view', 
-            hideMenu: true};
+        return {title: 'View ePortfolio Entry', name: '', containerClass: 'entry-view'};
     }
 
     if(/^\/pledge\/edit\//.test(path)) {
         return {title: 'Pledge For Badge', name: '', containerClass: 'pledge-edit', 
-            hideMenu: true, editFooter: true};    
+                editFooter: true};    
     }
 
     if(/^\/pledge\/view\//.test(path)) {
-        return {title: 'View Pledge For Badge', name: '', containerClass: 'pledge-view', 
-            hideMenu: true};    
+        return {title: 'View Pledge For Badge', name: '', containerClass: 'pledge-view'};    
     }
     
     return {};
 }
 
 export const DEFAULT_STATE = {
+    isOffline: false,
+    toSync: 0,              // number of updates to sync
+    lastSync: null,         // last sync
     loaded: false,
     error: null,            // global error
     issuers: [],            // [<string>]
@@ -131,6 +155,9 @@ export const DEFAULT_STATE = {
             isShared: false,
             wasShared: false,
             neverShared: false,
+            isValid: false,
+            isRevoked: false,
+            isExpired: false
         },
         {
             startDate: '', // YYYY-MM-DD

@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'lti_provider',
     'compressor',
     'reversion',
     'rest_framework',
@@ -49,6 +50,7 @@ INSTALLED_APPS = [
     'oauth2_provider',
     'corsheaders',
     'widget_tweaks',
+    #"sslserver",
 ]
 
 MIDDLEWARE = [
@@ -61,7 +63,7 @@ MIDDLEWARE = [
     'oauth2_provider.middleware.OAuth2TokenMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    #'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'forallbackpack.middleware.TrackingMiddleware',
 ]
 
@@ -184,7 +186,7 @@ ONEDRIVE_API_CLIENTID = ''
 ONEDRIVE_API_SECRET = ''
 
 # django-oauth-toolkit
- 
+
 OAUTH2_PROVIDER = {
     # this is the list of available scopes
     'SCOPES': {'read': 'Read scope', 'write': 'Write scope', 'groups': 'Access to your groups'},
@@ -225,4 +227,32 @@ CORS_ORIGIN_ALLOW_ALL = True
 AUTHENTICATION_BACKENDS = (
     'oauth2_provider.backends.OAuth2Backend',
     'django.contrib.auth.backends.ModelBackend',
+    'auth.lti.CustomLTIBackend',
 )
+
+
+
+LTI_TOOL_CONFIGURATION = {
+    'title': 'ForAllBackpacks',
+    'description': 'ForAllBackpacks is an open badges backpack.',
+    'launch_url': 'lti/',
+    'embed_url': '/',
+    'embed_icon_url': '',
+    'embed_tool_id': '',
+    'landing_url': '/',
+    'course_aware': False,
+    'course_navigation': False,
+    'navigation':True,
+    'new_tab': False,
+    'frame_width': 1024,
+    'frame_height': 768,
+    'assignments': {}
+}
+
+PYLTI_CONFIG = {
+    'consumers': {
+        'KEY': {
+            'secret': 'SECRET'
+        }
+    }
+}

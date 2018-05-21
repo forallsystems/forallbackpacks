@@ -59,8 +59,8 @@ def fetch_image(file_input):
     `file_input` = url or streamed request.
     """
     filepath, content_type = fetch_file(file_input)
-
-    if content_type not in [MIME_TYPE_PNG, MIME_TYPE_SVG]:
+    
+    if content_type not in IMAGE_MIME_TYPES:
         try:
             image = Image.open(filepath)
             content_type = 'image/%s' % image.format.lower()

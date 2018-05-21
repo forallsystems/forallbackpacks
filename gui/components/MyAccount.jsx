@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom';
 import {connect} from 'react-redux';
 import {List, Map, Set} from 'immutable';
 import * as constants from '../constants';
-import {ErrorAlert, InfoAlert} from './common.jsx';
+import {scrollTop, ErrorAlert, InfoAlert} from './common.jsx';
 import {showErrorModal, showInfoModal, showConfirmModal} from './Modals.jsx';
 import {
     fetchGetJSON, fetchPostJSON, fetchPatchJSON, fetchDeleteJSON,
@@ -196,59 +196,73 @@ class UserEmail extends React.Component {
             
             label = "(Primary)"
  
-            if(this.props.badge_count) {
-                 actions = (
-                    <a href="javascript:void(0)" title="Archive Email Address"
-                        className="text-primary"
-                        onClick={this.onArchive}>
-                        <i className="fa fa-trash" aria-hidden="true"></i>
-                    </a>
-                );
-            } else {
-                actions = (
-                    <a href="javascript:void(0)" title="Remove Email Address"
-                        className="text-primary"
-                        onClick={this.onDelete}>
-                        <i className="fa fa-trash" aria-hidden="true"></i>
-                    </a>
-                );
+            if(!this.props.isOffline) {
+                if(this.props.badge_count) {
+                     actions = (
+                        <a href="javascript:void(0)" title="Archive Email Address"
+                            className="text-primary"
+                            onClick={this.onArchive}>
+                            <i className="fa fa-trash" aria-hidden="true"></i>
+                        </a>
+                    );
+                } else {
+                    actions = (
+                        <a href="javascript:void(0)" title="Remove Email Address"
+                            className="text-primary"
+                            onClick={this.onDelete}>
+                            <i className="fa fa-trash" aria-hidden="true"></i>
+                        </a>
+                    );
+                }
             }
        } else {
             if(this.props.is_validated) {
-                setAsPrimary = (
-                    <a href="javascript:void(0)" title="Set As Primary" 
-                        onClick={this.onSetPrimary} 
-                        style={{color: '#a99f01'}}
-                    >
-                        <i className="fa fa-star-o" aria-hidden="true"></i>
-                    </a>            
-                ); 
+                if(this.props.isOffline) {
+                    setAsPrimary = (
+                        <i className="fa fa-star-o" aria-hidden="true" style={{color:'#a99f01'}}></i>
+                    );
+                } else {
+                    setAsPrimary = (
+                        <a href="javascript:void(0)" title="Set As Primary" 
+                            onClick={this.onSetPrimary} 
+                            style={{color:'#a99f01', cursor:'pointer'}}
+                        >
+                            <i className="fa fa-star-o" aria-hidden="true"></i>
+                        </a>            
+                    );
+                } 
             } else {
-                label = (
-                    <a href="javascript:void(0)" title="Resend verification email"
-                    onClick={this.onVerify}
-                    style={{color: '#000000', textDecoration: 'underline'}}>
-                        (Verify)
-                    </a>
-                );
+                if(this.props.isOffline) {
+                    label = (<span>(Unverified)</span>);                    
+                } else {
+                    label = (
+                        <a href="javascript:void(0)" title="Resend verification email"
+                        onClick={this.onVerify}
+                        style={{color: '#000000', textDecoration: 'underline'}}>
+                            (Verify)
+                        </a>
+                    );
+                }
             }
             
-            if(this.props.badge_count) {
-                actions = (
-                    <a href="javascript:void(0)" title="Archive Email Address"
-                        className="text-primary"
-                        onClick={this.onArchive}>
-                        <i className="fa fa-trash" aria-hidden="true"></i>
-                    </a>
-                );
-            } else {
-                actions = (
-                    <a href="javascript:void(0)" title="Remove Email Address"
-                        className="text-primary"
-                        onClick={this.onDelete}>
-                        <i className="fa fa-trash" aria-hidden="true"></i>
-                    </a>
-                );
+            if(!this.props.isOffline) {
+                if(this.props.badge_count) {
+                    actions = (
+                        <a href="javascript:void(0)" title="Archive Email Address"
+                            className="text-primary"
+                            onClick={this.onArchive}>
+                            <i className="fa fa-trash" aria-hidden="true"></i>
+                        </a>
+                    );
+                } else {
+                    actions = (
+                        <a href="javascript:void(0)" title="Remove Email Address"
+                            className="text-primary"
+                            onClick={this.onDelete}>
+                            <i className="fa fa-trash" aria-hidden="true"></i>
+                        </a>
+                    );
+                }
             }
         }
         
@@ -276,10 +290,6 @@ class _MyAccount extends React.Component {
             confirmPassword: '',
             notify_type: 0
         };
-
-        this.scrollTop = () => {
-            document.getElementById('contentContainer').scrollTop = 0;
-        }
 
         this.onChangeFirstName = (e) => {
             this.setState({first_name: e.target.value});
@@ -437,7 +447,7 @@ class _MyAccount extends React.Component {
             }
 
             if(errors.length) {
-                this.scrollTop();
+                scrollTop();
                 this.setState({errors: errors, info: null});
             } else {
                 fetchPostJSON(constants.API_ROOT+'me/account/', json_data)
@@ -445,7 +455,7 @@ class _MyAccount extends React.Component {
                         console.debug('success', json);
                         this.props.dispatch(fetchUserSuccess(json));
 
-                        this.scrollTop();
+                        scrollTop();
                         this.setState({
                             errors: [],
                             info: 'Your account has been updated!',
@@ -465,7 +475,7 @@ class _MyAccount extends React.Component {
                             errors.push('Error updating account: '+error.statusText);
                         }
 
-                        this.scrollTop();
+                        scrollTop();
                         this.setState({errors: errors, info: null});
                     });
             }
@@ -490,7 +500,7 @@ class _MyAccount extends React.Component {
     render() {
         var hasSMS = this.props.user.get('apps').size;        
         var emailSet = Set();
-        
+   
         var nUnverified = this.props.user.get('emails').reduce(function(sum, useremail) {
             emailSet = emailSet.add(useremail.get('email'));
             
@@ -513,22 +523,24 @@ class _MyAccount extends React.Component {
 
             <form autoComplete="nope">
                 <div className="safari_hack" style={{left: "-50px", position: "fixed",width: "1px;"}}>
-                  <input tabIndex="-1" name="email_hidden" type="email" style={{width:"1%"}}/>
-                  <input tabIndex="-1" name="User_Password" type="password" style={{width:"1%"}}/>
+                    <input tabIndex="-1" name="email_hidden" type="email" style={{width:"1%"}}/>
+                    <input tabIndex="-1" name="User_Password" type="password" style={{width:"1%"}}/>
                 </div>
                 <div className="form-group">
                     <label>First Name</label>
                     <input type="text" className="form-control" value={this.state.first_name}
                         required="true"
                         autoComplete="off"
-                        onChange={this.onChangeFirstName} />
+                        onChange={this.onChangeFirstName} 
+                        disabled={this.props.isOffline} />
                 </div>
                 <div className="form-group">
                     <label>Last Name</label>
                     <input type="text" className="form-control" value={this.state.last_name}
                         required="true"
                         autoComplete="off"
-                        onChange={this.onChangeLastName} />
+                        onChange={this.onChangeLastName} 
+                        disabled={this.props.isOffline} />
                 </div>
                 {(hasSMS) ? (
                     <div className="form-group">
@@ -537,24 +549,29 @@ class _MyAccount extends React.Component {
                             placeholder="xxx-xxx-xxxx"
                             autoComplete="off"
                             maxLength="12"
-                            onChange={this.onChangePhoneNumber} />
+                            onChange={this.onChangePhoneNumber} 
+                            disabled={this.props.isOffline} />
                     </div>
                 ) : null}
-                <div className="form-group">
-                    <label>New Password <small>(leave blank for no change)</small></label>
-                    <input type="password" className="form-control" value={this.state.password}
-                        maxLength="10"
-                        autoComplete="off"
-                        onChange={this.onChangePassword} />
-                    <small>Password must be at least 8 characters and contain at least one uppercase letter and one number.</small>
-                </div>
-                <div className="form-group">
-                    <label>Confirm New Password</label>
-                    <input type="password" className="form-control" value={this.state.confirmPassword}
-                        maxLength="10"
-                        autoComplete="off"
-                        onChange={this.onChangeConfirmPassword} />
-                </div>               
+                {(this.props.isOffline) ? null : (
+                    <div className="form-group">
+                        <label>New Password <small>(leave blank for no change)</small></label>
+                        <input type="password" className="form-control" value={this.state.password}
+                            maxLength="10"
+                            autoComplete="off"
+                            onChange={this.onChangePassword} />
+                        <small>Password must be at least 8 characters and contain at least one uppercase letter and one number.</small>
+                    </div>
+                )}
+                {(this.props.isOffline) ? null : (
+                    <div className="form-group">
+                        <label>Confirm New Password</label>
+                        <input type="password" className="form-control" value={this.state.confirmPassword}
+                            maxLength="10"
+                            autoComplete="off"
+                            onChange={this.onChangeConfirmPassword} />
+                    </div>  
+                )}             
                 <div className="form-group">                    
                     <label>Email Addresses {(nUnverified > 0) ? '('+nUnverified+' Not Verified)' : ''}</label>
                     
@@ -565,22 +582,30 @@ class _MyAccount extends React.Component {
                                 onDelete={this.onDeleteEmail}
                                 onArchive={this.onArchiveEmail}
                                 onVerify={this.onVerifyEmail}
+                                isOffline={this.props.isOffline}
                                 {...useremail.toJSON()} 
                             />
                         );                    
                     }, this)}
-                    <p className="form-control-static">
-                        <AddEmailAddress 
-                            value={emailSet} 
-                            dispatch={this.props.dispatch} 
-                            onVerificationSent={this.onVerificationSent}
-                        />
-                    </p>            
+                    {(this.props.isOffline) ? null : (
+                        <p className="form-control-static">
+                            <AddEmailAddress 
+                                value={emailSet} 
+                                dispatch={this.props.dispatch} 
+                                onVerificationSent={this.onVerificationSent}
+                            />
+                        </p>  
+                    )}          
                 </div>
                 {(hasSMS) ? (
                     <div className="form-group">
                         <label>Notifications</label>
-                        <select className="form-control" value={this.state.notify_type} onChange={this.onChangeNotifyType}>
+                        <select 
+                            className="form-control" 
+                            value={this.state.notify_type} 
+                            onChange={this.onChangeNotifyType}
+                            disabled={this.props.isOffline}
+                        >
                             <option value={constants.NOTIFY_TYPE.Email}>Email</option>
                             <option value={constants.NOTIFY_TYPE.SMS}>SMS</option>
                             <option value={constants.NOTIFY_TYPE.Email_SMS}>Email & SMS</option>
@@ -588,9 +613,11 @@ class _MyAccount extends React.Component {
                     </div>
                 ) : null}
             </form>
-            <button className="btn btn-primary btn-raised" onClick={this.onSave}>
-                Update Account
-            </button>
+            {(this.props.isOffline) ? null: (
+                <button className="btn btn-primary btn-raised" onClick={this.onSave}>
+                    Update Account
+                </button>
+            )}
             </span>
         );
     }
@@ -598,6 +625,7 @@ class _MyAccount extends React.Component {
 
 function mapStateToProps(state) {
     return {
+        isOffline: state.get('isOffline', false),
         error: state.get('error'),
         user: state.get('user')
     };

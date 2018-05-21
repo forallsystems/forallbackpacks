@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% load staticfiles %}{% load widget_tweaks %}
+{% block title %}Error{% endblock %}
+{% block custom_head_content %}
+<style>a {text-decoration:underline;}</style>
+{% endblock %}
+{% block content %}
+  <br/>
+  <form method="post" action="" >
+    <div class="alert alert-danger" role="alert">We were unable to verify the badge.  {{error}}</div>
+  </form>
+{% endblock %}

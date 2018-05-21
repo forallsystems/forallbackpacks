@@ -100,7 +100,7 @@ export class Tags extends React.Component {
         }
 
         this.onInputSave = (e) => {
-            var text = this.textInput.value;
+            var text = this.textInput.value.trim().replace(/\s+/g, ' ');
 
             if(text) {
                 if(!this.props.value.has(text)) {

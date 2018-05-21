@@ -7,6 +7,7 @@ import thunkMiddleware from 'redux-thunk'
 import createHashHistory from 'history/createHashHistory'
 //import initReactFastclick from 'react-fastclick';
 import * as constants from './constants';
+import {redirectToLogin} from './auth';
 import loggingMiddleware from './logging_middleware';
 import {reducer} from './reducer.jsx';
 import {setError, loadState} from './action_creators';
@@ -22,16 +23,6 @@ import {PledgeView} from './components/PledgeView.jsx';
 import {Portfolio} from './components/Portfolio.jsx';
 import {Timeline} from './components/Timeline.jsx';
 
-function generateToken(length) {
-    var n = length || 50;
-    var text = "";
-    var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
-    for(var i=0; i < n; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-    }
-    return text;
-}
 
 // django-oauth-toolkit redirects back to <request-uri>/#/access_token=...
 // => location.hash = #/access_token=...
@@ -52,22 +43,6 @@ function parseHashString() {
 
 function redirect(url) {
     document.location.href = url;
-}
-
-// Store authorization state value and redirect to FB authorization URL
-function redirectToLogin() {
-    var authState = generateToken(20);
-
-    var url = constants.AUTH.authorizationUrl+'?response_type=token'
-                + '&client_id='+constants.AUTH.clientId
-                + '&redirect_uri='+constants.APP_ROOT
-                + '&state='+authState;
-
-    localforage.setItem('authState', authState).then(function() {
-        document.location.href = url;
-    }).catch(function(error) {
-        store.dispatch(setError('Error setting authState', error));
-    });
 }
 
 // Process referrer
@@ -107,23 +82,21 @@ var history = createHashHistory()
 ReactDOM.render(
     <Provider store={store}>
         <Router history={history}>
-            <Switch>
-                <App>
-                    <Switch>
-                        <Route path="/badges/:awardId" component={Badge}  />
-                        <Route path="/badges"  component={BadgeList}  />
-                        <Route path="/entry/edit/:entryId" component={EntryEdit} />
-                        <Route path="/entry/edit" component={EntryEdit} />
-                        <Route path="/entry/view/:entryId" component={EntryView} />
-                        <Route path="/eportfolio" component={Portfolio} />
-                        <Route path="/my-account" component={MyAccount} />
-                        <Route path="/pledge/edit/:awardId" component={PledgeEdit} />
-                        <Route path="/pledge/view/:awardId" component={PledgeView} />
-                        <Route path="/timeline" component={Timeline} />
-                        <Route render={() =>  <Redirect to="/badges" />} />
-                    </Switch>
-                </App>
-            </Switch>
+            <App>
+                <Switch>
+                    <Route path="/badges/:awardId" component={Badge}  />
+                    <Route path="/badges"  component={BadgeList}  />
+                    <Route path="/entry/edit/:entryId" component={EntryEdit} />
+                    <Route path="/entry/edit" component={EntryEdit} />
+                    <Route path="/entry/view/:entryId" component={EntryView} />
+                    <Route path="/eportfolio" component={Portfolio} />
+                    <Route path="/my-account" component={MyAccount} />
+                    <Route path="/pledge/edit/:awardId" component={PledgeEdit} />
+                    <Route path="/pledge/view/:awardId" component={PledgeView} />
+                    <Route path="/timeline" component={Timeline} />
+                    <Route render={() =>  <Redirect to="/badges" />} />
+                </Switch>
+            </App>
         </Router>
     </Provider>,
     document.getElementById('root')
@@ -132,7 +105,7 @@ ReactDOM.render(
 // Check hash params for post-login authorization
 var hashParams = parseHashString();
 
-// Check query params for clear flag
+// Check query params for uid
 var queryParams = parseQueryString();
 
 if(hashParams.access_token && hashParams.state) {
@@ -152,41 +125,43 @@ if(hashParams.access_token && hashParams.state) {
                     store.dispatch(setError('Error storing token', error));
                 });
             } else {
-                redirectToLogin();
+                redirectToLogin(store);
             }
         }).catch(function(error) {
             store.dispatch(setError('Error clearing authState', error));
         });
     });
-} else if(queryParams.clear) {
-    console.debug('Clearing storage');
-    
-    localforage.clear().then(function() {
-        redirectToLogin();   
-    }).catch(function(err) {
-        store.dispatch(setError('Error clearing storage'));
-    });
 } else {
     // Check for token
     console.debug('Checking for token');
-
+    
     localforage.getItem('token').then(function(token) {
-        console.debug('Found token', token,  document.location.hash);
+        console.debug('Found token', token);
 
         if(token) {
-            if(document.location.hash == '#/') {
-                // Force complete state reload
-                localforage.removeItem('state').then(function() {
-                    store.dispatch(loadState(constants.DEFAULT_STATE));
-                }).catch(function(err) {
-                    store.dispatch(setError('Error clearing state'));
-                });
+            // Check for uid
+            if(queryParams.uid) {
+                localforage.getItem('state').then(function(cachedState) {
+                    if(cachedState && cachedState.user && cachedState.user.id == queryParams.uid) {
+                        // Retain cached state    
+                        redirect(constants.APP_ROOT);                  
+                    } else {
+                        // Clear cached state
+                        localforage.removeItem('state').then(function() {
+                            redirect(constants.APP_ROOT);
+                        }).catch(function(err) {
+                            store.dispatch(setError('Error clearing state'));
+                        });                       
+                    }
+                }).catch(function(error) {
+                    store.dispatch(setError('Error retrieving state', error));
+                });            
             } else {
-                // Use cached state if available
-                store.dispatch(loadState(constants.DEFAULT_STATE));
+                console.debug('Using cache state');
+                store.dispatch(loadState(constants.DEFAULT_STATE));                    
             }
         } else {
-            redirectToLogin();
+            redirectToLogin(store);
         }
     }).catch(function(error) {
         store.dispatch(setError('Error retrieving token', error));

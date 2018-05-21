@@ -7,6 +7,7 @@ app_name = 'auth'
 
 urlpatterns = [
     url(r'^login/(?P<token>(\w|\-)+)/$', views.token_login),
+    url(r'^refresh/(?P<token>(\w|\-)+)/$', views.token_refresh),
 ]
 
 

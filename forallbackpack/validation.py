@@ -7,7 +7,7 @@ from .models import UserEmail
 
 
 def validate_username(username, user=None):
-    if not re.match(r'^[\w.+-]{6,32}$', username):
+    if not re.match(r'^[\w.+-]{6,150}$', username):
         raise ValidationError(
             'Username must be at least 6 characters with only numbers, letters, and +/-/_/.',
             code='username_invalid')

@@ -2,7 +2,7 @@
 For API request logging.  Subclassing LoggingMixin to implement the _clean_data procedure
 which is not in drf-tracking version 1.2.0 available on pip at this time.
 """
-import re, traceback
+import copy, re, traceback
 from django.utils.timezone import now
 from rest_framework_tracking.mixins import LoggingMixin as _LoggingMixin
 from rest_framework_tracking.models import APIRequestLog
@@ -74,7 +74,7 @@ class LoggingMixin(_LoggingMixin):
             self.request.log.data = _clean_data(self.request.data.dict())
         except AttributeError:  # if already a dict, can't dictify
             if isinstance(self.request.data, dict):
-                self.request.log.data = _clean_data(dict(self.request.data))
+                self.request.log.data = _clean_data(copy.deepcopy(self.request.data))
             else:
                 self.request.log.data = self.request.data
         finally:
@@ -83,15 +83,22 @@ class LoggingMixin(_LoggingMixin):
 
 def _clean_data(data):
     """
-    Clean a dictionary of data of potentially sensitive info before
-    sending to the database.
+    Remove data not to be logged from a dictionary.
     Function based on the "_clean_credentials" function of django
     (django/django/contrib/auth/__init__.py)
+    Note: modifies data in-place, so pass a deep copy
     """
-    SENSITIVE_DATA = re.compile('api|token|key|secret|password|signature', re.I)
+    SENSITIVE_DATA = re.compile('api|token|key|secret|password|signature|data_uri', re.I)
     CLEANSED_SUBSTITUTE = '********************'
-    for key in data:
-        if SENSITIVE_DATA.search(key):
-            if data[key]:
-                data[key] = CLEANSED_SUBSTITUTE
+    
+    if isinstance(data, dict):
+        for key in data:
+            if SENSITIVE_DATA.search(key):
+                if data[key]:
+                    data[key] = CLEANSED_SUBSTITUTE
+            elif isinstance(data[key], list):
+                data[key] = [_clean_data(v) for v in data[key]]            
+            elif isinstance(data[key], dict):
+                data[key] = _clean_data(data[key])
+        
     return data

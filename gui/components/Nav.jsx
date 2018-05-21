@@ -12,53 +12,34 @@ export class NavHeader extends React.Component {
         var pathInfo = constants.PATH_INFO(this.props.pathname);
         var toggle = null;
         var desktopBack = null;
-        var menu = <div style={{height: '28px'}}>&nbsp;</div>;
 
         if(!pathInfo.editFooter) {
-            toggle = (
-                <a href="javascript:void(0)" className="text-success"
-                    onClick={this.props.onSidebarToggle}
-                    style={{color:navLtGreenColor}}>
-                    <i className="fa fa-bars fa-2x"></i>
-                </a>
-            );
-        }
-
-        if(!pathInfo.name && !pathInfo.editFooter) {
-            toggle = (
-                <a href="javascript:void(0)" className="text-success"
-                    onClick={this.props.onGoBack}
-                    style={{color:navLtGreenColor}}>
-                    <i className="fa fa-chevron-left fa-2x"></i>
-                </a>
-            );
-
-            desktopBack = (
-                <a href="javascript:void(0)" className="text-success btn btn-raised btn-primary"
-                    onClick={this.props.onGoBack}
-                    style={{float:"right",marginTop:0}}
-                    >
-                    <i className="fa fa-chevron-left"></i> Back
-                </a>
-            );
-        }
-
-        if(!pathInfo.hideMenu) {
-            menu = (
-                <div className="dropdown">
-                    <a href="#" className="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false"
+            if(pathInfo.name) {
+                toggle = (
+                    <a href="javascript:void(0)" className="text-success"
+                        onClick={this.props.onSidebarToggle}
                         style={{color:navLtGreenColor}}>
-                        <i className="fa fa-cog fa-2x"></i>
+                        <i className="fa fa-bars fa-2x"></i>
                     </a>
-                    <ul className="dropdown-menu dropdown-menu-right">
-                        {(this.props.pathname == '/my-account') ? (
-                            <li style={{padding: '3px 20px'}}>My Account</li>
-                        ) : (
-                            <li><Link to='/my-account'>My Account</Link></li>
-                        )}
-                    </ul>
-                </div>
-            );
+                );
+            } else {
+                toggle = (
+                    <a href="javascript:void(0)" className="text-success"
+                        onClick={this.props.onGoBack}
+                        style={{color:navLtGreenColor}}>
+                        <i className="fa fa-chevron-left fa-2x"></i>
+                    </a>
+                );
+
+                desktopBack = (
+                    <a href="javascript:void(0)" className="text-success btn btn-raised btn-primary"
+                        onClick={this.props.onGoBack}
+                        style={{float:"right",marginTop:0}}
+                        >
+                        <i className="fa fa-chevron-left"></i> Back
+                    </a>
+                );
+            }
         }
 
        return (
@@ -84,6 +65,19 @@ export class NavHeader extends React.Component {
                 }}>
                     {pathInfo.title || '.'}
                 </div>
+                <div className="col-xs-2 visible-xs text-right" style={{
+                    backgroundColor:navDkGreenColor,
+                    paddingTop:'9px',
+                    paddingBottom:'8px',
+                }}>
+                {(this.props.onRefresh) ? (
+                    <a href="javascript:void(0)" className="text-success"
+                        onClick={this.props.onRefresh}
+                        style={{color:navLtGreenColor}}>
+                        <i className="fa fa-repeat fa-2x"></i>
+                    </a>
+                ) : null}
+                </div>
                 <div className="col-sm-12 hidden-xs text-left" style={{
                     color:navDkGreenColor,
                     backgroundColor:'#fff',
@@ -95,14 +89,6 @@ export class NavHeader extends React.Component {
                     lineHeight:'1.2em'
                 }}>
                     {desktopBack} {pathInfo.title || '.'}
-                </div>
-                <div className="col-xs-2 visible-xs text-right" style={{
-                    backgroundColor:navDkGreenColor,
-                    paddingTop: '9px',
-                    paddingBottom:'8px',
-                    fontWeight:400,
-                }}>
-                    {menu}
                 </div>
             </div>
         );
@@ -137,54 +123,7 @@ export class NavFooter extends React.Component {
 
     render() {
         var pathname = this.props.pathname;
-
-        var referrer = sessionStorage.getItem('referrer');
-        var referTo = null;
-        var refApp = null;
-
-        if(referrer) {
-            refApp = this.props.apps.find(data => data.get('app_url').startsWith(referrer));
-        }
-
-        if(refApp) {
-            referTo = (
-                <li role="presentation" style={{textAlign: 'center'}}>
-                    <a href={referrer} style={{color: 'white'}}>
-                        <i className="fa fa-2x fa-reply-all" aria-hidden="true"></i>
-                        <br />
-                        Back
-                    </a>
-                </li>
-            );
-        } else if(this.props.apps.size) {
-            referTo = (
-                <li role="presentation" style={{textAlign: 'center'}} className="dropup">
-                    <a href="javascript:void(0)"
-                        data-toggle="dropdown"
-                        role="button"
-                        aria-haspopup="true"
-                        aria-expanded="false"
-                        style={{
-                            color: 'white'
-                        }}
-                    >
-                        <i className="fa fa-2x fa-th-large" aria-hidden="true"></i>
-                        <br />
-                        Apps
-                    </a>
-                     <ul className="dropdown-menu dropdown-menu-right">
-                        {this.props.apps.map(function(data, i) {
-                            return (
-                                <li>
-                                    <a href={data.get('app_url')}>{data.get('app_name')}</a>
-                                </li>
-                            );
-                        }, this)}
-                     </ul>
-                </li>
-            );
-        }
-
+        
         return (
             <div className="row">
                 <ul className="nav nav-pills nav-justified visible-xs" style={{
@@ -194,7 +133,13 @@ export class NavFooter extends React.Component {
                     {this.renderLink('Badges', 'fa-star', '/badges', pathname)}
                     {this.renderLink('Timeline', 'fa-calendar', '/timeline', pathname)}
                     {this.renderLink('ePortfolio', 'fa-book', '/eportfolio', pathname)}
-                    {referTo}
+                    <li role="presentation" style={{textAlign: 'center'}}>
+                        <a href="javascript:void(0)" style={{color: 'white'}} onClick={this.props.onClickOffline}>
+                            <i className={"fa fa-2x fa-toggle-"+((this.props.isOffline) ? "on" : "off")} aria-hidden="true"></i>
+                            <br />
+                            Offline
+                        </a>
+                    </li>
                 </ul>
             </div>
         );
@@ -205,11 +150,9 @@ export class NavEditFooter extends React.Component {
     constructor(props) {
         super(props);
 
-        this.dispatchSaveEvent = this.dispatchSaveEvent.bind(this);
-    }
-
-    dispatchSaveEvent() {
-        dispatchCustomEvent('navEditSave', {});
+        this.onSave = (e) => {
+            dispatchCustomEvent('navEditSave', {});
+        }
     }
 
     render() {
@@ -220,7 +163,7 @@ export class NavEditFooter extends React.Component {
                     color:'#fff'
                 }}>
                     <li role="presentation" style={{textAlign: 'center'}}>
-                        <a href="javascript:void(0)" onClick={this.dispatchSaveEvent} style={{
+                        <a href="javascript:void(0)" onClick={this.onSave} style={{
                             color: 'white',
                             padding: '20px 0'
                         }}>

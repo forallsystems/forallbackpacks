@@ -10,20 +10,21 @@ import GooglePicker from 'react-google-picker';
 import * as constants from '../constants';
 import {
     fetchGetJSON, fetchPostJSON, fetchPatchJSON, fetchDeleteJSON, fetchPostFormData,
-    fetchUserSuccess,
-    addAward, updateAwardTags, deleteAward, deleteEntry,
-    addShare, deleteShare} from '../action_creators';
+    fetchUserSuccess, addAward, updateAwardTags, updateAwardStatus, deleteAward, 
+    deleteEntry, setIsOffline
+} from '../action_creators';
 import {
-    parseQueryString, getShareWarning, getEntryWarning,
-    ErrorAlert, InfoAlert, LoadingIndicator,
-    ViewCount, SharePanel} from './common.jsx';
+    parseQueryString, isOnline, isAwardExpired, getShareWarning, getEntryWarning,
+    ErrorAlert, InfoAlert, LoadingIndicator, ViewCount, SharePanel
+} from './common.jsx';
 import {FilterModal, FilterBar, filterBgColor} from './Filter.jsx';
 import {
-    showErrorModal, showInfoModal, showConfirmModal,
-    showProgressModal, hideProgressModal,
-    SharePublicLinkModal, ShareEmbedModal, ShareBlockedModal,
-    ExportAuthModal, ExportModal, FsBadgeModal, WelcomeModal} from './Modals.jsx';
+    showErrorModal, showInfoModal, showConfirmModal, showProgressModal, hideProgressModal,
+    FsBadgeModal, WelcomeModal, ShareDetailsModal
+} from './Modals.jsx';
 import {Tags} from './Tags.jsx';
+import {Exporter} from './Exporter.jsx'
+import {Sharer} from './Sharer.jsx'
 
 
 class CustomGooglePicker extends GooglePicker {
@@ -181,16 +182,35 @@ class BadgeListItem extends React.Component {
             this.props.onView(this.props.award.id);
         }
 
+        this.onClickViewCount = (e) => {
+            this.props.onShareDetails(this.props.award.id);
+        }
+
         this.onShowMenu = (e) => {
             this.props.onShowMenu(e, this.props.award.id);
         }
-
+        
         this.state = {};
     }
 
     render() {
-        var award = this.props.award;
-
+        var award = this.props.award;        
+        var status = null;
+        
+        if(award.revoked) {
+            status = (
+                <div className="list-group-item-text text-danger">
+                    Badge Was Revoked
+                </div>
+            );    
+        } else if(isAwardExpired(award)) {
+            status = (
+                <div className="list-group-item-text text-danger">
+                    Awarded badge no longer valid
+                </div>
+            );    
+        }
+                            
         return (
             <div className="list-group-item" style={{
                 position: 'relative',
@@ -210,7 +230,11 @@ class BadgeListItem extends React.Component {
                             </span>
                         </a>
                     </div>
-                    <ViewCount shares={award.shares} shareMap={this.props.shareMap} />
+                    <ViewCount 
+                        shares={award.shares} 
+                        shareMap={this.props.shareMap} 
+                        onClick={this.onClickViewCount}
+                    />
                     <div className="list-group-item-heading" style={{
                         height: '32px',
                         marginBottom: 0,
@@ -242,12 +266,15 @@ class BadgeListItem extends React.Component {
                     }}>
                        {moment(award.issued_date).format('MMMM Do, YYYY')} &middot; {award.issuer_org_name}
                     </div>
+                    {status}
                     <div>
                         <SharePanel
                             id={award.id}
                             shares={award.shares}
                             shareMap={this.props.shareMap}
                             handleShare={this.props.onShare}
+                            isOffline={this.props.isOffline}
+                            isInvalid={award.revoked || isAwardExpired(award)}
                         />
                     </div>
                     <Tags
@@ -297,7 +324,7 @@ function UnpledgedPopoverMenu(props) {
                     </li>
                    <li style={{padding:'8px 0'}}>
                         <a href='javascript:void(0)' onClick={props.onTrash}>
-                            <i className="fa fa-trash"/> Trash
+                            <i className="fa fa-trash"/> Remove
                         </a>
                     </li>                
                 </ul>
@@ -318,14 +345,16 @@ function BadgePopoverMenu(props) {
                             <i className="fa fa-search" /> View
                         </a>
                     </li>
-                    <li style={{padding:'8px 0'}}>
-                        <a href='javascript:void(0)' onClick={props.onExport}>
-                            <i className="fa fa-download" /> Export
-                        </a>
-                    </li>
+                    {(props.isOffline) ? null : (
+                        <li style={{padding:'8px 0'}}>
+                            <a href='javascript:void(0)' onClick={props.onExport}>
+                                <i className="fa fa-download" /> Export
+                            </a>
+                        </li>
+                    )}
                     <li style={{padding:'8px 0'}}>
                         <a href='javascript:void(0)' onClick={props.onTrash}>
-                            <i className="fa fa-trash"/> Trash
+                            <i className="fa fa-trash"/> Remove
                         </a>
                     </li>
                 </ul>
@@ -361,20 +390,6 @@ class _BadgeList extends React.Component {
     constructor(props) {
         super(props);
 
-        this.isOnline = (action, callback) => {
-            fetchGetJSON(constants.API_ROOT+'me/test/')
-                .then(() => {
-                    callback();
-                })
-                .catch((error) => {
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to '+action+'.';
-                    }
-                    
-                    showErrorModal('No Network Connection', error);
-                });
-        }
-
         this.onClaimFsBadge = () => {
             fetchGetJSON(constants.API_ROOT+'me/claim_fsbadge/')
                 .then(json => {
@@ -390,17 +405,17 @@ class _BadgeList extends React.Component {
                 });
         }
 
-        this.showAllBadgesPopoverMenu = (e, id) => {
+        this.showAllBadgesPopoverMenu = (e) => {
             e.preventDefault();     // prevent transition
             e.stopPropagation();    // prevent bubbling
         
             this.setState({
-                showAllBadgesMenu: !this.state.showAllBadgesMenu,
+                showAllBadgesMenu: true,
                 showBadgeMenu: false,
                 showUnpledgedMenu: false,
                 showPledgeMenu: false,
                 menuTarget: e.target,
-                curAwardId: id
+                curAwardId: ''
             });
         
         }
@@ -411,7 +426,7 @@ class _BadgeList extends React.Component {
 
             this.setState({
                 showAllBadgesMenu: false,
-                showBadgeMenu: !this.state.showBadgeMenu,
+                showBadgeMenu: true,
                 showUnpledgedMenu: false,
                 showPledgeMenu: false,
                 menuTarget: e.target,
@@ -426,7 +441,7 @@ class _BadgeList extends React.Component {
             this.setState({
                 showAllBadgesMenu: false,
                 showBadgeMenu: false,
-                showUnpledgedMenu: !this.state.showUnpledgedMenu,
+                showUnpledgedMenu: true,
                 showPledgeMenu: false,
                 menuTarget: e.target,
                 curAwardId: id
@@ -441,7 +456,7 @@ class _BadgeList extends React.Component {
                 showAllBadgesMenu: false,
                 showBadgeMenu: false,
                 showUnpledgedMenu: false,
-                showPledgeMenu: !this.state.showPledgeMenu,
+                showPledgeMenu: true,
                 menuTarget: e.target,
                 curAwardId: id
             });
@@ -455,19 +470,18 @@ class _BadgeList extends React.Component {
 // Upload
         this.showUploadFile = (e) => {
             this.setState({showAllBadgesMenu: false});
-            this.fileInput.click();       
+            this.fileInput.click();
         }
-
-        this.uploadFile = this.uploadFile.bind(this);
 
         this.showGooglePicker = (e) => {
             this.setState({showAllBadgesMenu: false});
             
-            this.isOnline('upload a badge', () => {
+            isOnline('upload a badge', () => {
                 this.googlePicker.onChoose(e);
             });
         }
 
+        this.uploadFile = this.uploadFile.bind(this);       
         this.uploadGoogleFile = this.uploadGoogleFile.bind(this);
         this.onGooglePickerChange = this.onGooglePickerChange.bind(this);
 
@@ -485,217 +499,63 @@ class _BadgeList extends React.Component {
         }
         
 // Share
-        this.deleteShareConfirm = (shareId) => {
-            var created_dt = this.props.shareMap.getIn([shareId, 'created_dt']);
-
-            showConfirmModal(
-                "Do you want to delete the share you created on "+moment(created_dt).format('MM/DD/YYYY')+"?",
-                this.deleteShare.bind(this, shareId)
-            );
+        this.showShareDetails = (awardId) => {    
+            ShareDetailsModal.show(this.props.awardMap.getIn([awardId, 'shares']));
         }
-
-        this.deleteShare = (shareId) => {
-            fetchDeleteJSON(constants.API_ROOT+'share/'+shareId+'/')
-                .then(() => {
-                    console.debug('success');
-                    this.props.dispatch(deleteShare(shareId));
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete a share.';
-                    }
-                    showErrorModal('Error Deleting Share', error);
-                });
-        }
-
+               
         this.handleShare = (id, shareType, shareId) => {
             var award = this.props.awardMap.get(id);
 
             if(shareId) {
-                switch(shareType) {
-                    case 'type_link':
-                        var shareUrl = this.props.shareMap.getIn([shareId, 'url']);
-                        SharePublicLinkModal.show(shareId, shareUrl);
-                        break;
-
-                    case 'type_embed':
-                        var shareUrl = this.props.shareMap.getIn([shareId, 'url']);
-                        ShareEmbedModal.show(shareId, shareUrl+'?embed=1');
-                        break;
-
-                    default:
-                        this.deleteShareConfirm(shareId);
-                        break;
-                }
+                this.sharer.viewShare(shareId);
+            } else if(award.get('revoked')) {
+                showErrorModal('Error Creating Share', 'You may not share revoked badges.'); 
+            } else if(isAwardExpired(award.toJSON())) {
+                showErrorModal('Error Creating Share', 'You may not share expired badges.');
+            } else if(this.props.isOffline) {
+                showErrorModal('Offline Mode', 'You must be online to share a badge.');
             } else {
-                fetchPostJSON(constants.API_ROOT+'share/', {
-                    content_type: 'award',
-                    object_id: id,
-                    type: shareType
-                })
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(addShare(json));
-                    this.handlePostShare(award, json.url, shareType);
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to share a badge.';
-                    }
-                    showErrorModal('Error Creating Share', error);
-                });
-            }
-        }
+                isOnline('create a share', () => {
+                    showProgressModal('Creating share');
+                
+                    // Verify awarded badge
+                    fetchGetJSON(constants.API_ROOT+'award/'+id+'/verify/') 
+                        .then((json) => {
+                            console.debug('success', json);     
+                            hideProgressModal();
 
-        this.handlePostShare = (award, shareUrl, shareType) => {
-            var openService = '';
-            var openURL = '';
-
-            switch(shareType) {
-                case 'type_link':
-                    SharePublicLinkModal.show(null, shareUrl);
-                    return;
-
-                case 'type_embed':
-                    ShareEmbedModal.show(null, shareUrl+'?embed=1');
-                    return;
-
-                case 'type_facebook':
-                    openService = 'Facebook';
-                    openURL = 'https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(shareUrl);
-                    break;
-
-                case 'type_twitter':
-                    var badge_name = award.get('badge_name');
-                    openService = 'Twitter';
-                    openURL = 'https://twitter.com/intent/tweet?text='+encodeURIComponent(badge_name+' '+shareUrl);
-                    break;
-
-                case 'type_pinterest':
-                    var badge_image = award.get('badge_image');
-                    var url = encodeURIComponent(shareUrl);
-                    var media = encodeURIComponent(badge_image);
-                    openService = 'Pinterest';
-                    openURL = 'https://pinterest.com/pin/create/button/'+'?url='+url+'&media='+media+'&description=';
-                    break;
-
-                case 'type_googleplus':
-                    openService = 'Google Plus';
-                    openURL = 'https://plus.google.com/share?url='+encodeURIComponent(shareUrl);
-                    break;
-
-                case 'type_linkedin':
-                    var badge_name = award.get('badge_name');
-                    var url = encodeURIComponent(shareUrl);
-                    var title = encodeURIComponent(badge_name);
-
-                    openService = 'LinkedIn';
-                    openURL = 'https://www.linkedin.com/shareArticle?mini=true&url='+url+'&title='+title+'&summary=&source=';
-                    break;
-            }
-
-            var newWindow = window.open(openURL, '_blank', 'width=600,height=600');
-
-            if (newWindow == null || typeof(newWindow) == 'undefined') {
-                ShareBlockedModal.show(openService, openURL);
+                            this.props.dispatch(updateAwardStatus(
+                                json.id, json.verified_dt, json.revoked, json.revoked_reason
+                            ));
+                        
+                            if(json.revoked) {
+                                showErrorModal('Error Creating Share', 'You may not share revoked badges.');
+                            } else {
+                                this.sharer.createShare(shareType, award.toJSON());  
+                            }
+                        })
+                        .catch((error) => {
+                            console.error('error', error); // ignore
+                            hideProgressModal();
+                            
+                            // Allow share if it was verified at some point
+                            if(award.get('verified_dt')) {
+                                this.sharer.createShare(shareType, award.toJSON());  
+                            } else {
+                                showErrorModal('Error Creating Share', 'Unable to verify your badge.');
+                            }
+                        });   
+                });       
             }
         }
 
 // Export
         this.onExport = (e) => {
             this.setState({showBadgeMenu: false});
-
-            ExportModal.show(
-                this.state.curAwardId,
+            this.exporter.beginExport(
+                this.state.curAwardId, 
                 this.props.awardMap.getIn([this.state.curAwardId, 'badge_name'])
             );
-        }
-
-        this.handleExportDownload = (id) => {
-            fetchGetJSON(constants.API_ROOT+'me/test/')
-                .then((unused) => {
-                    location.href =  constants.SERVER_ROOT+'assertion/'+id+'/download/';
-                })
-                .catch((error) => {
-                    showErrorModal(
-                        'Error Exporting Badge',
-                        'You must be online to download a badge.'
-                    );
-                });
-        }
-
-        this.handleExportDropbox = (id) => {
-            showProgressModal('Sending Badge to Dropbox');
-
-            fetchGetJSON(constants.API_ROOT+'award/'+id+'/export_dropbox/')
-                .then((json) => {
-                    console.debug('success', json);
-                    hideProgressModal();
-                    showInfoModal('Success!', 'Your badge has been exported to Dropbox.');
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    hideProgressModal();
-
-                    if(error.status == 403) {
-                        ExportAuthModal.show(constants.AUTH.service.Dropbox, id);
-                    } else {
-                        if(error instanceof TypeError) {
-                            error = 'You must be online to export a badge.';
-                        }
-                        showErrorModal('Error Archiving Badge', error);
-                    }
-                });
-        }
-
-        this.handleExportGoogleDrive = (id) => {
-            showProgressModal('Sending Badge to Google Drive');
-
-            fetchGetJSON(constants.API_ROOT+'award/'+id+'/export_googledrive/')
-                .then((json) => {
-                    console.debug('success', json);
-                    hideProgressModal();
-                    showInfoModal('Success!', 'Your badge has been exported to Google Drive.');
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    hideProgressModal();
-
-                    if(error.status == 403) {
-                        ExportAuthModal.show(constants.AUTH.service.GoogleDrive, id);
-                    } else {
-                        if(error instanceof TypeError) {
-                            error = 'You must be online to export a badge.';
-                        }
-                        showErrorModal('Error Archiving Badge', error);
-                    }
-                });
-        }
-
-        this.handleExportOneDrive = (id) => {
-            showProgressModal('Sending Badge to OneDrive');
-
-            fetchGetJSON(constants.API_ROOT+'award/'+id+'/export_onedrive/')
-                .then((json) => {
-                    console.debug('success', json);
-                    hideProgressModal();
-                    showInfoModal('Success!', 'Your badge has been exported to OneDrive.');
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    hideProgressModal();
-
-                    if(error.status == 403) {
-                        ExportAuthModal.show(constants.AUTH.service.OneDrive, id);
-                    } else {
-                        if(error instanceof TypeError) {
-                            error = 'You must be online to export a badge.';
-                        }
-                        showErrorModal('Error Archiving Badge', error);
-                    }
-                });
         }
 
 // Trash
@@ -734,52 +594,91 @@ class _BadgeList extends React.Component {
         }
         
         this.trashPledge = (confirm) => {
+            var self = this;
             var id = this.props.awardMap.getIn([this.state.curAwardId, 'entry']);
             
-            fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
-                .then(json => {
-                    this.props.dispatch(deleteEntry(id));
-                })
-                .catch(error => {
-                    console.error('error deleting pledge', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete a pledge.';
-                    }
-                    showErrorModal('Error Deleting Pledge', error);
-                });
+            if(this.props.isOffline) {
+                this.props.dispatch(deleteEntry(id));
+            } else {
+                fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
+                    .then(json => {
+                        this.props.dispatch(deleteEntry(id));
+                    })
+                    .catch(error => {
+                        console.error('error deleting pledge', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to delete pledge.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(deleteEntry(id));                        
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Deleting Pledge', error);
+                        }
+                    });
+            }
         }
 
         this.trashAward = (confirm) => {
+            var self = this;
             var id = this.state.curAwardId;
-            var shares = this.props.awardMap.getIn([id, 'shares']);
-
-            fetchDeleteJSON(constants.API_ROOT+'award/'+id+'/')
-                .then(json => {
-                    this.props.dispatch(deleteAward(id));
-                })
-                .catch(error => {
-                    console.error('error deleting award', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete a badge.';
-                    }
-                    showErrorModal('Error Deleting Badge', error);
-                });
+            
+            if(this.props.isOffline) {
+                this.props.dispatch(deleteAward(id));
+            } else {
+                fetchDeleteJSON(constants.API_ROOT+'award/'+id+'/')
+                    .then(json => {
+                        this.props.dispatch(deleteAward(id));
+                    })
+                    .catch(error => {
+                        console.error('error deleting award', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to delete badge.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.props.dispatch(deleteAward(id));                      
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Deleting Badge', error);
+                        }
+                    });
+            }
         }
 
 // Tags (called from BadgeListItem)
         this.saveTags = (awardId, value) => {
-            fetchPostJSON(constants.API_ROOT+'award/'+awardId+'/tags/', value)
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(updateAwardTags(awardId, json.tags));
-                })
-                .catch((error) => {
-                    console.log('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to modify tags.'
-                    }
-                    showErrorModal('Error Saving tags', error);
-                });
+            var self = this;
+            
+            if(this.props.isOffline) {
+                this.props.dispatch(updateAwardTags(awardId, value.toJSON().sort()));
+            } else {                        
+                fetchPostJSON(constants.API_ROOT+'award/'+awardId+'/tags/', value)
+                    .then((json) => {
+                        console.debug('success', json);
+                        this.props.dispatch(updateAwardTags(awardId, json.tags));
+                    })
+                    .catch((error) => {
+                        console.log('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to update tags.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(updateAwardTags(awardId, value.toJSON().sort()));                         
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Saving Tags', error);
+                        }
+                    });
+            }
         }
 
 // Filter
@@ -811,8 +710,13 @@ class _BadgeList extends React.Component {
         var isShared = filter.get('isShared');
         var wasShared = filter.get('wasShared');
         var neverShared = filter.get('neverShared');
+
+        var isValid = filter.get('isValid');
+        var isRevoked = filter.get('isRevoked');
+        var isExpired = filter.get('isExpired');
         
         var filterShared = isShared || wasShared || neverShared;
+        var filterStatus = isValid || isRevoked || isExpired;
 
         var awardMap = props.awardMap;
         var shareMap = props.shareMap;
@@ -822,7 +726,7 @@ class _BadgeList extends React.Component {
             var issued_date = item.get('issued_date');
 
             if(item.get('is_deleted')) {
-                return false;
+                return false;   // Never show deleted
             }
             
             if(startDate && (issued_date < startDate)) {
@@ -859,39 +763,40 @@ class _BadgeList extends React.Component {
                 
                 return false;
             }
+            
+            if(filterStatus) {
+                var _isExpired = isAwardExpired(item.toJSON());
+                var _isRevoked = item.get('revoked');
+                
+                if(isExpired && _isExpired) {
+                    return true;
+                }
+                
+                if(isRevoked && _isRevoked) {
+                    return true;
+                }
+                
+                if(isValid && !(_isExpired || _isRevoked)) {
+                    return true;
+                }
+                
+                return false;
+            }
                       
             return true;
         }, this);
     }
 
     componentDidMount() {
-        var params = parseQueryString(this.props.location.search);
-
-        // Clear any params
-        this.props.history.replace(this.props.history.location.pathname);
-
-        // Check for post-auth params
-        if(params.oa) {
-            if(params.err) {
-                // Report error
-                var name = '<unknown service>';
-
-                switch(params.oa) {
-                    case 'db': name = 'Dropbox'; break;
-                    case 'gd': name = 'Google Drive'; break;
-                    case 'od': name = 'OneDrive'; break;
-                }
-
-                showErrorModal(null, 'We were unable to send your badge to '+name);
-            } else {
-                // Resume export
-                switch(params.oa) {
-                    case 'db': this.handleExportDropbox(params.id); break;
-                    case 'gd': this.handleExportGoogleDrive(params.id); break;
-                    case 'od': this.handleExportOneDrive(params.id); break;
-                }
-            }
-        } else if(this.props.user.get('is_new')) {
+        if(this.exporter.handleQueryString(this.props))  {  
+            return; // noop
+        }
+        
+        if(this.props.isOffline) {
+            return; // don't try to claim anything if offline
+        }
+        
+        if(this.props.user.get('is_new')) {
             WelcomeModal.show(this.onClaimFsBadge);
 
             fetchPostJSON(constants.API_ROOT+'me/account/', {
@@ -1017,20 +922,30 @@ class _BadgeList extends React.Component {
                     showInfoModal('Success!', 'Your badge has beed uploaded!');
                 })
                 .catch((error) => {
-                    console.error('error', error);
-                    this.fileInputForm.reset();                   
+                    console.error('error', typeof(error), error);
+                    this.fileInputForm.reset();    
+                    
+                    var errorMsg = '';               
                     
                     if(error instanceof TypeError) {
-                        error = 'You must be online to upload a badge.';
+                        errorMsg = 'You must be online to upload a badge.';
+                    } else if(error.status == 410) {
+                        errorMsg = 'Unable to upload your badge.  ';
+                        
+                        if(error.statusText) {
+                            errorMsg += 'This badge was revoked ('+error.statusText+').';
+                        } else {
+                            errorMsg += 'This badge was revoked.';
+                        }                            
                     } else {
                         // standard error message only
-                        error = 'Unable to upload your badge.  '
-                              + 'Please verify that it is an Open Badge and that '
-                              + 'the email address associated with the badge has been added to your account.';                              
+                        errorMsg = 'Unable to upload your badge.  '
+                            + 'Please verify that it is an Open Badge and that '
+                            + 'the email address associated with the badge has been added to your account.';                              
                     }
                     
                     hideProgressModal();
-                    showErrorModal('Error Uploading Badge', error);
+                    showErrorModal('Error Uploading Badge', errorMsg);
                 });
         }
     }
@@ -1064,17 +979,29 @@ class _BadgeList extends React.Component {
                 })
                 .catch((error) => {
                     console.error('error', error);
-                     if(error instanceof TypeError) {
-                        error = 'You must be online to upload a badge.';
+
+                    var errorMsg = '';               
+
+                    if(error instanceof TypeError) {
+                        errorMsg = 'You must be online to upload a badge.';
+                    } else if(error.status == 410) {
+                        errorMsg = 'Unable to upload your badge.  ';
+
+                        if(error.statusText) {
+                            errorMsg += 'This badge was revoked ('+error.statusText+').';
+                        } else {
+                            errorMsg += 'This badge was revoked.';
+                        }                            
+                    
                     } else {
                         // standard error message only
-                        error = 'Unable to upload your badge.  '
-                              + 'Please verify that it is an Open Badge and that '
-                              + 'the email address associated with the badge has been added to your account.';                              
+                        errorMsg = 'Unable to upload your badge.  '
+                            + 'Please verify that it is an Open Badge and that '
+                            + 'the email address associated with the badge has been added to your account.';                              
                     }
                     
                     hideProgressModal();
-                    showErrorModal('Error Uploading Badge', error);
+                    showErrorModal('Error Uploading Badge', errorMsg);
                 });
         };
 
@@ -1089,7 +1016,7 @@ class _BadgeList extends React.Component {
             var docs = data[google.picker.Response.DOCUMENTS];
 
             docs.forEach(function(file) {
-                self.isOnline('upload a file', () => {
+                isOnline('upload a badge', () => {
                     gapi.client.request({
                         'path': '/drive/v2/files/'+file.id,
                         'method': 'GET',
@@ -1132,6 +1059,8 @@ class _BadgeList extends React.Component {
                             onShowMenu={this.showBadgePopoverMenu}
                             onSaveTags={this.saveTags}
                             onShare={this.handleShare}
+                            onShareDetails={this.showShareDetails}
+                            isOffline={this.props.isOffline}
                         />
                     );
                 } else {                              
@@ -1143,6 +1072,7 @@ class _BadgeList extends React.Component {
                             onShowMenu={(awardJS.entry) ? this.showPledgePopoverMenu : this.showUnpledgedPopoverMenu}
                             onSaveTags={this.saveTags}
                             onShare={this.handleShare}
+                            onShareDetails={this.showShareDetails}
                             onPledge={this.pledgeBadge}
                         />
                     );
@@ -1167,17 +1097,19 @@ class _BadgeList extends React.Component {
                         onClickFilter={this.showFilterModal}
                         hasMenu={true}
                     />
-                    <div className="pull-right filterBarMenuTrigger" style={{
-                        marginTop:'9px'
-                    }}>
-                        <a href="javascript:void(0)" onClick={this.showAllBadgesPopoverMenu}>
-                            <span className="glyphicon glyphicon-option-vertical" style={{
-                                color: '#000000',
-                                fontSize: '16px'                                
-                            }}>
-                            </span>
-                        </a>
-                    </div>
+                    {(this.props.isOffline) ? null : (
+                        <div className="pull-right filterBarMenuTrigger">
+                            <a href="javascript:void(0)" onClick={this.showAllBadgesPopoverMenu}>
+                                <span className="glyphicon glyphicon-option-vertical" style={{
+                                    color: '#000000',
+                                    fontSize: '16px',
+                                    minHeight: '37px',
+                                    lineHeight: '37px'
+                                }}>
+                                </span>
+                            </a>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -1198,6 +1130,7 @@ class _BadgeList extends React.Component {
                     onView={(e) => this.viewAward(this.state.curAwardId)}
                     onExport={this.onExport}
                     onTrash={this.trashAwardConfirm}
+                    isOffline={this.props.isOffline}
                 />
                 <UnpledgedPopoverMenu
                     rootClose={true}
@@ -1236,10 +1169,10 @@ class _BadgeList extends React.Component {
             />
 
             <form ref={(el) => {this.fileInputForm = el;}}>
-                <input ref={(el) => {this.fileInput = el;}} type="file" accept="image/png, image/svg+xml" style={{display: 'none'}}
+                <input ref={(el) => {this.fileInput = el;}} type="file" accept="image/png, image/svg+xml" style={{display:'none'}}
                     onChange={this.uploadFile}
                 />           
-             </form>
+            </form>
 
             <CustomGooglePicker ref={(el) => {this.googlePicker = el;}}
                 clientId={constants.AUTH.service.GoogleDrive.client_id}
@@ -1270,21 +1203,18 @@ class _BadgeList extends React.Component {
                 attrs={this.props.attrs}
             />
 
-            <SharePublicLinkModal onDelete={this.deleteShareConfirm} />
-            <ShareEmbedModal onDelete={this.deleteShareConfirm} />
-            <ShareBlockedModal />
-
-            <ExportAuthModal />
-
-            <ExportModal
-                handleDownload={this.handleExportDownload}
-                handleDropbox={this.handleExportDropbox}
-                handleGoogleDrive={this.handleExportGoogleDrive}
-                handleOneDrive={this.handleExportOneDrive}
+            <Sharer ref={(el) => {this.sharer = el;}}
+                contentType='award' 
+                dispatch={this.props.dispatch}
+                shareMap={this.props.shareMap} 
+                isOffline={this.props.isOffline}
             />
+            
+            <Exporter ref={(el) => {this.exporter = el;}} />
 
             <FsBadgeModal />
             <WelcomeModal />
+            <ShareDetailsModal shareMap={this.props.shareMap} />
 
             </span>
         );
@@ -1293,6 +1223,7 @@ class _BadgeList extends React.Component {
 
 function mapStateToProps(state) {
     return {
+        isOffline: state.get('isOffline', false),
         user: state.get('user', new Map()),
         filter: state.getIn(['filter', constants.TAG_TYPE.Award], new Map()),
         issuers: state.get('issuers', new List()),

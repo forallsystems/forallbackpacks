@@ -80,16 +80,22 @@ class CustomLoginView(LoginView):
 
         return super(CustomLoginView, self).form_valid(form)
 
+    def get_default_redirect_url(self):
+        if self.request.user and self.request.user.is_authenticated:
+            return resolve_url(settings.LOGIN_REDIRECT_URL+'?uid='+str(self.request.user.userprofile.id))
+        else:
+            return resolve_url(settings.LOGIN_REDIRECT_URL+'?uid=1')
+        
     def get_success_url(self):
         redirect_to = self.request.POST.get(
             self.redirect_field_name, 
             self.request.GET.get(self.redirect_field_name, None)
         )
-        return redirect_to or resolve_url(settings.LOGIN_REDIRECT_URL+'?clear=1')
+        return redirect_to or self.get_default_redirect_url()
 
     def get_register_success_url(self, next):
         params = parse_qs(urlparse(next).query)
-        redirect_to = params.get('register_next', [settings.LOGIN_REDIRECT_URL+'?clear=1'])[0]
+        redirect_to = params.get('register_next', [self.get_default_redirect_url()])[0]
         return redirect_to
 
     def get_context_data(self, **kwargs):
@@ -123,7 +129,7 @@ def init(request):
     if redirect_to:
         return redirect('/'+redirect_to+'/')
 
-    if request.user.is_authenticated():
+    if request.user.is_authenticated:
         if request.user.is_superuser:
             return redirect('/admin/')
 
@@ -147,7 +153,8 @@ def init(request):
             request.session['EVENT_ID'] = ''
             request.session['EVENT_CLASS_CODE'] = ''
 
-        return redirect(settings.LOGIN_REDIRECT_URL+'?clear=1')
+        # Redirect with UserProfile.id and let front-end decide to clear or not
+        return redirect(settings.LOGIN_REDIRECT_URL+'?uid='+str(request.user.userprofile.id))
     else:
         return render(request, 'registration/home.html', {})
 
@@ -295,7 +302,7 @@ def claim_account(request):
                 # Login the user and redirect to home
                 login(request, user, 'django.contrib.auth.backends.ModelBackend')
                 
-                return redirect(settings.LOGIN_REDIRECT_URL+'?clear=1')
+                return redirect(settings.LOGIN_REDIRECT_URL+'?uid='+str(user.userprofile.id))
         else:
             form = ClaimAccountForm()            
             
@@ -330,11 +337,11 @@ def claim_account(request):
 @logging_decorator
 def register(request):
     """Register for an account"""
-    if request.user.is_authenticated():
-        return redirect(settings.LOGIN_REDIRECT_URL)
+    if request.user.is_authenticated:
+        return redirect(settings.LOGIN_REDIRECT_URL+'?uid='+str(request.user.userprofile.id))
 
     next = request.POST.get('next',
-        request.GET.get('next', settings.LOGIN_REDIRECT_URL+'?clear=1'))
+        request.GET.get('next', settings.LOGIN_REDIRECT_URL+'?uid=1'))
 
     if request.method == 'POST':
         form = RegistrationForm(request.POST)
@@ -384,6 +391,7 @@ def register(request):
             award = Award.objects.create(
                 user=new_user,
                 issued_date='2015-09-01',
+                verified_dt=timezone.now(),
                 student_name=new_user.get_full_name(),
                 student_email=new_user.email,
                 org_issued_name="ForAllSystems",
@@ -405,6 +413,7 @@ def register(request):
             award = Award.objects.create(
                 user=new_user,
                 issued_date='2016-06-01',
+                verified_dt=timezone.now(),
                 student_name=new_user.get_full_name(),
                 student_email=new_user.email,
                 org_issued_name="ForAllSystems",
@@ -425,8 +434,6 @@ def register(request):
 
             # Redirect
             return redirect('/sendActivation/'+user_email.id.__str__()+"/")
-
-            #return redirect(next)
     else:
         form = RegistrationForm()
 

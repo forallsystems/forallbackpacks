@@ -1,4 +1,4 @@
-import base64, io, re, uuid
+import base64, io, os, re, tempfile, uuid
 from urlparse import urljoin, urlparse
 from django.contrib.auth import password_validation
 from django.contrib.auth.models import User
@@ -8,9 +8,22 @@ from django.urls import reverse
 from rest_framework import mixins, serializers
 from tracking.models import Visitor
 from PIL import Image, ExifTags
+from forallbackpack import file_util
 from forallbackpack.models import *
 from forallbackpack.validation import validate_username, validate_email
 
+
+RE_DATA_URI = re.compile(r'^data:(?P<mediatype>[^\;]*)(;(?P<encoding>base64))?,(?P<data>.*)')
+
+
+class BaseModelSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        raise NotImplementedError(
+            '`%s.create()` is not implemented.' % self.__class__.__name__)
+
+    def update(self, instance, validated_data):
+        raise NotImplementedError(
+            '`%s.update()` is not implemented.' % self.__class__.__name__)
 
 class UserProfileValidatorMixin(object):
     def validate_phone_number(self, value):
@@ -131,6 +144,22 @@ class ForallUserSerializer(serializers.ModelSerializer, UserProfileValidatorMixi
 
         return UserProfile.objects.create(user=user, **validated_data)
 
+class SetPasswordSerializer(serializers.Serializer):
+    forallbackpack_user_id = serializers.UUIDField()
+    password = serializers.CharField()
+    
+    class Meta:
+        fields = ('forallbackpack_user_id', 'password',)
+
+    def validate_password(self, value):
+        """Use built-in Django password validation"""
+        try:
+            password_validation.validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError(str(e))
+
+        return value
+       
 class ResetPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
     from_name = serializers.CharField()
@@ -385,37 +414,38 @@ class NotifyEmailSerializer(serializers.Serializer):
             raise serializers.ValidationError("`message` or `html_message` required")
         return data
 
-class TagSerializer(serializers.ModelSerializer):
+class TagSerializer(BaseModelSerializer):
     class Meta:
         model = Tag
         fields = ('id', 'name', 'type',)
 
-    def create(self, validated_data):
-        raise NotImplementedError(
-            '`%s.create()` is not implemented.' % self.__class__.__name__)
-
-    def update(self, instance, validated_data):
-        raise NotImplementedError(
-            '`%s.update()` is not implemented.' % self.__class__.__name__)
-
-class EvidenceSerializer(serializers.ModelSerializer):
+class EvidenceSerializer(BaseModelSerializer):
     class Meta:
         model = Evidence
         fields = ('id', 'file', 'hyperlink', 'label', 'description',)
 
-class AwardSerializer(serializers.ModelSerializer):
+class AwardEndorsementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AwardEndorsement
+        fields = (
+            'id', 'issuer_name', 'issuer_url', 'issuer_email', 'issuer_image_data_uri',
+        )
+        
+class AwardSerializer(BaseModelSerializer):
     tags = serializers.SerializerMethodField()
     shares = serializers.SerializerMethodField()
     evidence = EvidenceSerializer(source='evidence_set', many=True)
+    endorsements = AwardEndorsementSerializer(source='awardendorsement_set', many=True)
 
     class Meta:
         model = Award
         fields = (
-            'id', 'issued_date', 'expiration_date', 'student_name', 'badge_name',
+            'id', 'issued_date', 'expiration_date', 'verified_dt', 'revoked', 
+            'revoked_reason', 'student_name', 'badge_name',
             'badge_version',  'badge_description', 'badge_criteria', 'badge_image',
             'baked_image_url', 'badge_image_data_uri', 'assertion_url',
             'issuer_org_url', 'issuer_org_name',
-            'tags', 'shares', 'evidence', 'entry', 'is_deleted'
+            'tags', 'shares', 'evidence', 'endorsements', 'entry', 'is_deleted',
         )
 
     def get_tags(self, obj):
@@ -424,15 +454,18 @@ class AwardSerializer(serializers.ModelSerializer):
     def get_shares(self, obj):
         return obj.shares.values_list('id', flat=True)
 
-    def create(self, validated_data):
-        raise NotImplementedError(
-            '`%s.create()` is not implemented.' % self.__class__.__name__)
+class AwardVerifySerializer(BaseModelSerializer):
+    class Meta:
+        model = Award
+        fields = ('id', 'verified_dt', 'revoked', 'revoked_reason',)
 
-    def update(self, instance, validated_data):
-        raise NotImplementedError(
-            '`%s.update()` is not implemented.' % self.__class__.__name__)
-
-class AttachmentSerializer(serializers.ModelSerializer):
+class FilteredListSerializer(serializers.ListSerializer):
+    """Filter deleted and order by creation date"""
+    def to_representation(self, data):
+        data = data.filter(is_deleted=False).order_by('created_dt')
+        return super(FilteredListSerializer, self).to_representation(data)
+    
+class AttachmentSerializer(BaseModelSerializer):
     hyperlink = serializers.SerializerMethodField()
 
     class Meta:
@@ -441,6 +474,7 @@ class AttachmentSerializer(serializers.ModelSerializer):
             'id', 'section', 'label', 'award', 'file', 'hyperlink',  'data_uri',
             'created_dt',
         )
+        list_serializer_class = FilteredListSerializer
 
     def get_hyperlink(self, obj):
         if obj.hyperlink:
@@ -456,24 +490,16 @@ class AttachmentSerializer(serializers.ModelSerializer):
         return ''
 
 class SectionSerializer(serializers.ModelSerializer):
-    attachments = serializers.SerializerMethodField()
+    attachments = AttachmentSerializer(many=True)
 
     class Meta:
         model = Section
         fields = ('id', 'title', 'text', 'attachments', 'updated_dt',)
         extra_kwargs = {'id': {'read_only': False, 'required': False}}
-
-    def get_attachments(self, obj):
-        attachments = []
-
-        for attachment in obj.attachments.order_by('created_dt'):
-            attachments.append(
-                AttachmentSerializer(attachment, context=self.context).data)
-
-        return attachments
+        list_serializer_class = FilteredListSerializer
 
 class EntrySerializer(serializers.ModelSerializer):
-    sections = serializers.ListSerializer(child=SectionSerializer())
+    sections = SectionSerializer(many=True)
     tags = serializers.SerializerMethodField()
     shares = serializers.SerializerMethodField()
 
@@ -489,17 +515,40 @@ class EntrySerializer(serializers.ModelSerializer):
     def get_shares(self, obj):
         return obj.shares.values_list('id', flat=True)
 
-class AttachmentPostSerializer(serializers.ModelSerializer):
+class AttachmentPostFileField(serializers.FileField):
+    """Allow front-end to send URL as file"""
+    def to_internal_value(self, data):
+        if isinstance(data, basestring)\
+        and re.match(r'^https?://', data):
+            return data
+                   
+        return super(AttachmentPostFileField, self).to_internal_value(data)
+
+class AttachmentPostSerializer(BaseModelSerializer):
+    file = AttachmentPostFileField(required=False, allow_null=True)
+    copy = serializers.PrimaryKeyRelatedField(
+        required=False, allow_null=True, queryset=Attachment.objects.all())
+    
     class Meta:
         model = Attachment
-        fields = ('id', 'section', 'label', 'award', 'file', 'hyperlink',)
+        fields = (
+            'id', 'section', 'label', 'award', 'file', 'hyperlink', 'data_uri', 'copy'
+        )
+        extra_kwargs = {'id': {'read_only': False, 'required': False}}
 
-    def create(self, validated_data):
+    def validate_data_uri(self, value):
+        if value and not RE_DATA_URI.match(value):
+            raise serializers.ValidationError('Invalid data_uri.')
+        
+        return value
+ 
+    def process_image_file(self, uploaded_file):
         data_uri = ''
-
+        
+        if not uploaded_file:
+            return data_uri
+            
         try:
-            uploaded_file = validated_data['file']
-
             image = Image.open(uploaded_file)
             image_format = image.format
 
@@ -525,7 +574,7 @@ class AttachmentPostSerializer(serializers.ModelSerializer):
                         uploaded_file.seek(0)
                         image.save(uploaded_file, format=image_format)
 
-            # Make data uri if image
+            # Make data_uri for thumbnail, if needed
             if image_format in ('GIF', 'JPEG', 'JPG', 'PNG'):
                 thumbnail = image.copy()
                 image.thumbnail((300, 300), Image.ANTIALIAS)
@@ -541,20 +590,59 @@ class AttachmentPostSerializer(serializers.ModelSerializer):
                 buffer.close()
 
             uploaded_file.seek(0)
-        except KeyError:
-            pass
-        except IOError:
-            pass
+        except (KeyError, IOError):
+            pass   
+            
+        return data_uri
 
-        return Attachment.objects.create(
+    def create(self, validated_data):
+        label = validated_data.get('label', '')
+        
+        copy = validated_data.pop('copy', None)
+        data_uri = validated_data.pop('data_uri', '')
+        uploaded_file = validated_data.pop('file', None)
+        temp_filepath = ''
+        
+        if copy:
+            # Copy file from existing attachment
+            uploaded_file = copy.file    
+        elif data_uri:          
+            # Save data_uri to tempfile and then blank
+            m = RE_DATA_URI.match(data_uri)
+   
+            mediatype = m.group('mediatype') or 'text/plain'
+            encoding = m.group('encoding') or None
+            data = m.group('data')
+
+            _, suffix = os.path.splitext(label)   
+            if not suffix:
+                suffix = file_util.guess_extension(mediatype) or ''
+            
+            (fd, temp_filepath) = tempfile.mkstemp(suffix=suffix)
+            
+            uploaded_file = os.fdopen(fd, 'r+b')
+            if encoding:
+                uploaded_file.write(base64.b64decode(data))       
+            else:
+                uploaded_file.write(data)
+            
+            uploaded_file.seek(0)
+        
+        data_uri = self.process_image_file(uploaded_file)
+        
+        instance = Attachment.objects.create(
             user=self.context.get('request').user, data_uri=data_uri, **validated_data)
-
-    def update(self, instance, validated_data):
-        raise NotImplementedError(
-            '`%s.update()` is not implemented.' % self.__class__.__name__)
-
-class SectionPostSerializer(serializers.ModelSerializer):
-    attachments = serializers.ListSerializer(child=serializers.UUIDField())
+ 
+        if uploaded_file:
+            instance.file.save(label, uploaded_file)
+        
+        if temp_filepath:
+            os.remove(temp_filepath)
+            
+        return instance
+        
+class SectionPostSerializer(BaseModelSerializer):
+    attachments = serializers.ListSerializer(child=AttachmentPostSerializer())
 
     class Meta:
         model = Section
@@ -566,65 +654,65 @@ class EntryPostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Entry
-        fields = (
-            'id', 'award', 'sections',
-        )
+        fields = ('id', 'award', 'sections',)
+        extra_kwargs = {'id': {'read_only': False, 'required': False}}
 
     def create(self, validated_data):
+        # Handle special kwarg (ignore)
+        ignore_attachments = validated_data.pop('ignore_attachments', True)
+        
         user = self.context.get('request').user
 
-        # Create entry
-        instance = Entry.objects.create(user=user, award=validated_data.get('award', None))
+        section_data_list = validated_data.pop('sections', [])
+        
+        instance = Entry.objects.create(user=user, **validated_data)
 
-        # Add sections
-        for section_data in validated_data.get('sections'):
-            attachment_data = section_data.pop('attachments', [])
-
+        for section_data in section_data_list:
+            # Ignore attachments, saved separately by UI
+            section_data.pop('attachments', [])
+            
             section = Section.objects.create(entry=instance, **section_data)
-
-            # Update section attachments with section id
-            Attachment.objects.filter(id__in=attachment_data).update(section=section)
-
+    
         return instance
 
     def update(self, instance, validated_data):
-        """Only updating sections for now"""
-        old_section_set = set(list(instance.sections.values_list('id', flat=True)))
-
-        old_attachment_set = set(list(
-            Attachment.objects.filter(section_id__in=old_section_set)\
+         # Handle special kwarg
+        ignore_attachments = validated_data.pop('ignore_attachments', False)
+        
+        user = self.context.get('request').user
+        
+        old_sections = set(
+            instance.sections.filter(is_deleted=False)\
                 .values_list('id', flat=True)
-        ))
+        )
 
-        # Upsert sections
+        old_attachments = set(
+            Attachment.objects.filter(section_id__in=old_sections, is_deleted=False)\
+                .values_list('id', flat=True)
+        )
+        
         for section_data in validated_data.get('sections'):
-            attachment_data = section_data.pop('attachments', [])
-
-            section_id = section_data.get('id', None)
-
-            if section_id:
-                section = Section.objects.get(pk=section_id)
+            # Assume attachments saved separately by UI
+            attachment_data_list = section_data.pop('attachments', [])
+            
+            try:
+                section = Section.objects.get(pk=section_data.get('id'))
                 section.title = section_data.get('title')
                 section.text = section_data.get('text')
-                section.save()
-
-                old_section_set.remove(section_id)
-            else:
+                section.save()  
+                
+                old_sections.remove(section.id)       
+            except Section.DoesNotExist:
                 section = Section.objects.create(entry=instance, **section_data)
-
-            # Update section attachments with section id
-            Attachment.objects.filter(id__in=attachment_data).update(section=section)
-            old_attachment_set -= set(attachment_data)
-
-        # Delete any sections that are no longer present
-        Section.objects.filter(id__in=old_section_set).delete()
-
-        # Delete any attachments that are no longer present
-        for attachment_id in old_attachment_set:
-            attachment = Attachment.objects.get(pk=attachment_id)
-            if attachment.file:
-                attachment.file.delete()
-            attachment.delete()
+             
+            if not ignore_attachments:                
+                old_attachments -= set([d['id'] for d in attachment_data_list])
+                                                             
+        # Flag old sections/attachments as deleted
+        Section.objects.filter(id__in=old_sections).update(is_deleted=True)
+        
+        if not ignore_attachments:
+            Attachment.objects.filter(id__in=old_attachments).update(is_deleted=True)
 
         return instance
 
@@ -651,7 +739,7 @@ class ContentTypeField(serializers.RelatedField):
         except ContentType.DoesNotExist:
             self.fail('does_not_exist', name=data)
 
-class ShareSerializer(serializers.ModelSerializer):
+class ShareSerializer(BaseModelSerializer):
     content_type = ContentTypeField()
     url = serializers.SerializerMethodField()
     views = serializers.SerializerMethodField()
@@ -687,11 +775,7 @@ class ShareSerializer(serializers.ModelSerializer):
         except ObjectDoesNotExist as e:
             raise serializers.ValidationError(str(e))
 
-    def update(self, instance, validated_data):
-        raise NotImplementedError(
-            '`%s.update()` is not implemented.' % self.__class__.__name__)
-
-class RegistrationSerializer(serializers.ModelSerializer):
+class RegistrationSerializer(BaseModelSerializer):
     class Meta:
         model = Registration
         exclude = ('id', 'key', 'secret' )

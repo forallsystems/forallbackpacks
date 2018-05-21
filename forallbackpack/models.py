@@ -196,6 +196,11 @@ class Award(models.Model):
     external_badge_id = models.TextField(blank=True,null=True)
     expiration_date = models.DateField(blank=True,null=True)
 
+    verified_dt = models.DateTimeField(blank=True, null=True, default=None,
+        help_text='Date and time of last successful verification')
+    revoked = models.BooleanField(blank=True, default=False)
+    revoked_reason = models.TextField(blank=True, default='')
+
     student_name = models.TextField(blank=True)
     student_email = models.EmailField(blank=True)
 
@@ -213,14 +218,14 @@ class Award(models.Model):
     issuer_org_email = models.TextField(blank=True)
     issuer_org_origin = models.TextField(blank=True)
 
-    baked_image_url = models.TextField(blank=True,null=True)
+    baked_image_url = models.TextField(blank=True, null=True)
     badge_image_data_uri = models.TextField(blank=True,
-        help_text='Data URL for badge image thumbnail') # generate on save
+        help_text='Data URI for badge image thumbnail') # generate on save
 
     tags = models.ManyToManyField(Tag, blank=True)
     shares = GenericRelation(Share)
     is_deleted = models.BooleanField(blank=True, default=False)
-
+    
     def __str__(self):
         return self.badge_name
 
@@ -245,6 +250,21 @@ class AwardCustom(models.Model):
     name = models.CharField(max_length=256)
     value = models.TextField(blank=True, null=True, max_length=256)
 
+class AwardEndorsement(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    award = models.ForeignKey(Award)
+    issuer_name = models.CharField(max_length=256)
+    issuer_url = models.URLField()
+    issuer_email = models.EmailField(blank=True, default='')
+    issuer_image = models.FileField(blank=True, null=True, upload_to='files/awardendorsement', max_length=255)
+    issuer_image_data_uri = models.TextField(blank=True, default='',
+        help_text='Data URI for image thumbnail') # generate on save
+    issued_on = models.DateTimeField()
+
+    class Meta:
+        verbose_name = 'AwardEndorsement'
+        ordering = ['issuer_name']    
+    
 class Entry(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey(User)
@@ -295,4 +315,4 @@ class Attachment(models.Model):
         elif self.hyperlink:
             return self.hyperlink
         else:
-            return self.description
+            return self.label

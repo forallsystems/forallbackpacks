@@ -5,17 +5,19 @@ import {connect} from 'react-redux';
 import {List, Map, Set} from 'immutable';
 import {Popover, Overlay} from 'react-bootstrap';
 import moment from 'moment';
+import uuid from 'uuid-random';
 import GooglePicker from 'react-google-picker';
 import * as constants from '../constants';
 import {
-    getAttachmentIcon, ErrorAlert, SharePanel, AttachmentPopoverMenu, UploadPopoverMenu
+    scrollTop, isImageAttachment, isOnline, isAwardExpired, getAttachmentIcon, ErrorAlert, 
+    AttachmentPopoverMenu, UploadPopoverMenu
 } from './common.jsx';
 import {
-    fetchGetJSON, fetchPostJSON, fetchPostFormData, fetchPatchJSON, fetchDeleteJSON,
-    addEntry, updateEntry
+    fetchGetJSON, fetchPostJSON, fetchPatchJSON, addEntry, updateEntry, setIsOffline
 } from '../action_creators';
 import {
-    showErrorModal, showInfoModal, showConfirmModal, SelectBadgeModal
+    showErrorModal, showInfoModal, showConfirmModal, showProgressModal, hideProgressModal,
+    SelectBadgeModal, showImageModal
 } from './Modals.jsx';
 import {Tags} from './Tags.jsx';
 
@@ -71,9 +73,10 @@ class _EntryEdit extends React.Component {
                 showAttachmentMenu: false,
                 menuTarget: null,
                 curAttachmentIndex: '', // active attachment for popover menu
+                curAttachment: {},
                 errors: [],
                 id: entry.get('id'),
-                sections: entry.get('sections').toJS()
+                sections: entry.get('sections').toJS(),
             };
         } else {
             this.state = {
@@ -81,48 +84,31 @@ class _EntryEdit extends React.Component {
                 showAttachmentMenu: false,
                 menuTarget: null,
                 curAttachmentIndex: '', // active attachment for popover menu
+                curAttachment: {},
                 errors: [],
                 id: null,
                 sections: [{title: '', text: '', attachments: []}]
             };
         }
 
-        this.isOnline = (action, callback) => {
-            fetchGetJSON(constants.API_ROOT+'me/test/')
-                .then(() => {
-                    callback();
-                })
-                .catch((error) => {
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to '+action+'.';
-                    }
-                    showErrorModal('No Network Connection', error);
-                });
+// Edit
+        this.onChangeTitle = (e) => {
+            var sections = this.state.sections;
+            sections[0].title = e.target.value;
+            this.setState({sections: sections});
         }
 
+        this.onChangeText = (e) => {
+            var sections = this.state.sections;
+            sections[0].text = e.target.value;
+            this.setState({sections: sections});
+        }
+
+// Attachments
         this.getAttachmentIcon = (attachment) => {
-            if(attachment.award) {
-                var award = this.props.awardMap.get(attachment.award);
-                return (
-                    <img src={award.get('badge_image')} height="70" />
-                );
-            }
-
-            return getAttachmentIcon(attachment.file, attachment.label, 70, 'fa-5x');
-        }
-
-        this.showUploadMenu = (e) => {
-            var target = e.target;
-
-            e.preventDefault();     // prevent transition
-            e.stopPropagation();    // prevent bubbling
-
-            this.isOnline('upload a file', () => {
-                this.setState({
-                    showUploadMenu: !this.state.showUploadMenu,
-                    menuTarget: target
-                });
-            });
+            return getAttachmentIcon(
+                attachment, this.props.awardMap.get(attachment.award), 70, 'fa-5x'
+            );
         }
 
         this.showAttachmentMenu = (e, attachmentIndex) => {
@@ -130,128 +116,126 @@ class _EntryEdit extends React.Component {
 
             e.preventDefault();     // prevent transition
             e.stopPropagation();    // prevent bubbling
-        
-            this.isOnline('view or modify attachments', () => {
-                this.setState({
-                    showAttachmentMenu: !this.state.showAttachmentMenu,
-                    menuTarget: target,
-                    curAttachmentIndex: attachmentIndex
-                });
-            })
+
+            var attachment = this.state.sections[0].attachments[attachmentIndex];
+            
+            this.setState({
+                showAttachmentMenu: true,
+                menuTarget: target,
+                curAttachmentIndex: attachmentIndex,
+                curAttachment: attachment
+            });
         }
 
-        // For NavEditFooter
-        this.handleEvent = this.handleEvent.bind(this);
+        this.viewAttachment = (attachmentIndex) => {
+            // non-image views handled by link in popover
+            this.setState({showAttachmentMenu: false});
 
+            var attachment = this.state.sections[0].attachments[attachmentIndex];
+            
+            if(isImageAttachment(attachment)) {
+                if(attachment.id) {
+                    showImageModal(attachment.label, attachment.hyperlink);
+                } else {
+                    showImageModal(attachment.label, attachment.data_uri);
+                }
+            }
+        }
+
+        this.downloadAttachment = (attachmentIndex) => {
+            // downloads handled by link in popover
+            this.setState({showAttachmentMenu: false});
+        }
+        
+        this.trashAttachment = (attachmentIndex) => {
+            // For synced or unsynced attachments
+            this.setState({
+                showAttachmentMenu: false, 
+                curAttachmentIndex: 0,
+                curAttachment: {}
+            });
+
+            var sections = this.state.sections;
+            sections[0].attachments.splice(attachmentIndex, 1);
+            this.setState({sections: sections});
+        }
+
+// Attach Badge
+        this.onAttachBadge = (e) => {
+            // Filter used, deleted, pledgable badges
+            var usedMap = this.state.sections[0].attachments.reduce(function(d, attachment) {
+                if(attachment.award) {
+                    d[attachment.award] = 1;
+                }
+                return d;
+            }, {});
+                   
+            var awardList = this.props.awardList.filterNot(function(awardId) {                    
+                return usedMap[awardId] 
+                    || this.props.awardMap.getIn([awardId, 'is_deleted'])
+                    || (this.props.awardMap.getIn([awardId, 'issued_date']) == null)
+            }, this);
+        
+            if(awardList.size) {
+                SelectBadgeModal.show(awardList, this.props.awardMap);
+            } else {
+                showInfoModal('Select Badge', 'No additional badges found.');
+            }
+        }
+        
+        this.onSelectBadge = (awardId) => {
+            var sections = this.state.sections;                
+            sections[0].attachments.push({
+                label: this.props.awardMap.getIn([awardId, 'badge_name']),
+                award: awardId
+            });
+            this.setState({sections: sections});
+        }
+        
+// Uploads
+        this.showUploadMenu = (e) => {
+            var target = e.target;
+
+            e.preventDefault();     // prevent transition
+            e.stopPropagation();    // prevent bubbling
+
+            if(this.props.isOffline) {
+                this.showUploadFile(e);
+            } else {
+                this.setState({
+                    showUploadMenu: !this.state.showUploadMenu,
+                    menuTarget: target
+                });
+            }
+        }
+        
         this.showUploadFile = (e) => {
             this.setState({showUploadMenu: false});
             this.fileInput.click();
         }
 
-        this.uploadFile = this.uploadFile.bind(this);
-
         this.showGooglePicker = (e) => {
             this.setState({showUploadMenu: false});
-            this.googlePicker.onChoose(e);
+            
+            isOnline('upload a file from Google Drive', () => {
+                this.googlePicker.onChoose(e);
+            });
         }
 
+        this.storeFileAsAttachment = this.storeFileAsAttachment.bind(this);
+        this.uploadFile = this.uploadFile.bind(this);       
         this.uploadGoogleFile = this.uploadGoogleFile.bind(this);
         this.uploadGoogleDoc = this.uploadGoogleDoc.bind(this);
         this.onGooglePickerChange = this.onGooglePickerChange.bind(this);
-
-        this.scrollTop = () => {
-            document.getElementById('contentContainer').scrollTop = 0;
-        }
-
-        this.onChangeTitle = (e) => {
-            var sections = this.state.sections;
-            sections[0].title = e.target.value;
-
-            this.setState({sections: sections});
-        }
-
-        this.onChangeText = (e) => {
-            var sections = this.state.sections;
-            sections[0].text = e.target.value;
-
-            this.setState({sections: sections});
-        }
-
-        this.onAttachBadge = (e) => {
-            this.isOnline('attach a badge', () => {
-                // Filter used, deleted, pledgable badges
-                var usedMap = this.state.sections[0].attachments.reduce(function(d, attachment) {
-                    if(attachment.award) {
-                        d[attachment.award] = 1;
-                    }
-                    return d;
-                }, {});
-                       
-                var awardList = this.props.awardList.filterNot(function(awardId) {                    
-                    return usedMap[awardId] 
-                        || this.props.awardMap.getIn([awardId, 'is_deleted'])
-                        || (this.props.awardMap.getIn([awardId, 'issued_date']) == null)
-                }, this);
-            
-                if(awardList.size) {
-                    SelectBadgeModal.show(awardList, this.props.awardMap);
-                } else {
-                    showInfoModal('Select Badge', 'No additional badges found.');
-                }
-            });
-        }
-
-        this.onSelectBadge = (awardId) => {
-            var errors = [];
-
-            fetchPostJSON(constants.API_ROOT+'attachment/', {
-                label: this.props.awardMap.getIn([awardId, 'badge_name']),
-                award: awardId
-            })
-            .then((json) => {
-                console.debug('success', json);
-
-                var sections = this.state.sections;
-                sections[0].attachments.push(json);
-
-                this.setState({sections: sections});
-            })
-            .catch((error) => {
-                console.error('error', error);
-                if(error instanceof TypeError) {
-                    error = 'You must be online to attach a badge.';
-                } else if(error.detail) {
-                    for(var key in error.detail) {
-                        error = error.detail[key];
-                        break;
-                    }
-                }
-
-                showErrorModal('Error Attaching Badge', error);
-            });
-        }
-
-        this.viewAttachment = (attachmentIndex) => {
-            this.setState({showAttachmentMenu: false});
-
-            var attachment = this.state.sections[0].attachments[attachmentIndex];
-            window.open(attachment.hyperlink, '_blank', 'width=600,height=600');
-        }
-
-        this.trashAttachment = (attachmentIndex) => {
-            this.setState({showAttachmentMenu: false});
-
-            var sections = this.state.sections;
-            sections[0].attachments.splice(attachmentIndex, 1);
-
-            this.setState({sections: sections});
-        }
+        
+// For NavEditFooter
+        this.handleEvent = this.handleEvent.bind(this);
     }
 
     handleEvent(e) {
         switch(e.type) {
             case 'navEditSave': // from NavEditFooter
-                this.save();
+                this.onSave();
                 break;
         }
     }
@@ -264,94 +248,105 @@ class _EntryEdit extends React.Component {
         document.removeEventListener('navEditSave', this, false);
     }
 
+    storeFileAsAttachment(fileInfo, fileObject) {
+        var self = this;        
+        var reader = new FileReader();
+        
+        reader.onerror = function(e) {
+            console.debug('reader.onerror', e.target.error);    
+            hideProgressModal();
+            showErrorModal('Error Uploading File', 'Unable to upload file.');
+            self.fileInputForm.reset();
+        }
+    
+        reader.onload = function(e) {
+            console.debug('reader.onload');
+            hideProgressModal();
+        
+            var sections = self.state.sections;
+            sections[0].attachments.push({
+                label: fileInfo.name,
+                data_uri: reader.result,
+                fileSize: fileInfo.size || fileInfo.sizeBytes                        
+            });
+            self.setState({sections: sections});
+            self.fileInputForm.reset();
+        }
+
+        reader.readAsDataURL(fileObject);
+    }
+    
+    checkFileSize(fileSize, mimetype) {
+        var error = '';
+        
+        if(this.props.isOffline) {
+            if(fileSize > constants.ATTACHMENT_OFFLINE_BYTE_LIMIT) {
+                if(/video\/.+/.test(mimetype)) {
+                    error = 'You may only attach videos that are less than 15 seconds.';            
+                } else {
+                    error = 'You may not upload files over 8MB.';
+                }
+            }
+        } else {
+            if(fileSize > constants.ATTACHMENT_ONLINE_BYTE_LIMIT) {
+                if(/video\/.+/.test(mimetype)) {
+                    error = 'You may only attach videos that are less than a minute and 30 seconds.';            
+                } else {
+                    error = 'You may not upload files over 50MB.';
+                }
+            }
+        }
+        
+        return error;
+    }
+    
     uploadFile(e) {
-        var self = this;
-
         if(this.fileInput.files.length) {
-            var file = this.fileInput.files[0];
+            var fileInfo = this.fileInput.files[0];            
+            var error = this.checkFileSize(fileInfo.size, fileInfo.type);
+            
+            if(error) {
+                showErrorModal('Upload Error', 'This file is too large.  '+error);               
+                this.fileInputForm.reset();
+            } else {                             
+                showProgressModal('Uploading File');    
+                this.storeFileAsAttachment(fileInfo, fileInfo);
+            }
+        }
+    }
+    
+    uploadGoogleFile(file, responsejs) {
+        var error = this.checkFileSize(file.sizeBytes, file.mimeType);
+        
+        if(error) {
+            showErrorModal('Upload Error', 'This file is too large.  '+error);            
+        } else {   
+            var self = this;
+            var accessToken = gapi.auth.getToken().access_token;
+            var xhr = new XMLHttpRequest();
 
-            var formData = new FormData();
-            formData.append('label', file.name);
-            formData.append('file', file, file.name);
+            showProgressModal('Uploading File');
 
-            fetchPostFormData(constants.API_ROOT+'attachment/', formData)
-                .then((json) => {
-                    console.debug('success', json);
+            xhr.open('GET', responsejs.downloadUrl);
+            xhr.setRequestHeader('Authorization', 'Bearer '+accessToken);
+            xhr.responseType = "blob";
 
-                    var sections = self.state.sections;
-                    sections[0].attachments.push(json);
+            xhr.onload = function() {
+                self.storeFileAsAttachment(file, xhr.response);
+            };
 
-                    self.setState({sections: sections});
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to upload a file.';
-                    }
-                    showErrorModal('Error Uploading File', error);
-                });
+            xhr.send();
         }
     }
 
-    uploadGoogleFile(file, responsejs) {
-        var self = this;
-
-        var accessToken = gapi.auth.getToken().access_token;
-
-        var xhr = new XMLHttpRequest();
-
-        xhr.open('GET', responsejs.downloadUrl);
-        xhr.setRequestHeader('Authorization', 'Bearer '+accessToken);
-        xhr.responseType = "blob";
-
-        xhr.onload = function() {
-            var formData = new FormData();
-            formData.append('label', file.name);
-            formData.append('file', xhr.response, file.name);
-
-            fetchPostFormData(constants.API_ROOT+'attachment/', formData)
-                .then((json) => {
-                    console.debug('success', json);
-
-                    var sections = self.state.sections;
-                    sections[0].attachments.push(json);
-
-                    self.setState({sections: sections});
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                     if(error instanceof TypeError) {
-                        error = 'You must be online to upload a file.';
-                    }
-                    showErrorModal('Error Uploading File', error);
-                });
-        };
-
-        xhr.send();
-    }
-
     uploadGoogleDoc(file, responsejs) {
-        var self = this;
-
-        fetchPostJSON(constants.API_ROOT+'attachment/', {
-                label: file.name,
-                hyperlink: responsejs.alternateLink
-            })
-            .then((json) => {
-                console.debug('success', json);
-
-                var sections = self.state.sections;
-                sections[0].attachments.push(json);
-
-                self.setState({sections: sections});
-            })
-            .catch((error) => {
-                console.error('error', error);
-                 if(error instanceof TypeError) {
-                    error = 'You must be online to upload a file.';
-                }
-                showErrorModal('Error Uploading File', error);
-            });
+        var sections = this.state.sections;
+        
+        sections[0].attachments.push({
+            label: file.name,
+            hyperlink: responsejs.alternateLink        
+        });
+        this.setState({sections: sections});
     }
 
     onGooglePickerChange(data) {
@@ -361,7 +356,7 @@ class _EntryEdit extends React.Component {
             var docs = data[google.picker.Response.DOCUMENTS];
 
             docs.forEach(function(file) {
-                self.isOnline('upload a file', () => {
+                isOnline('upload a file from Google Drive', () => {
                     gapi.client.request({
                         'path': '/drive/v2/files/'+file.id,
                         'method': 'GET',
@@ -378,106 +373,170 @@ class _EntryEdit extends React.Component {
         }
     }
 
-    getSectionsData() {
-        return this.state.sections.map(function(section) {
-            var data = {
-                title: section.title,
-                text: section.text,
-                attachments: section.attachments.map(function(attachment) {
-                    return attachment.id;
-                })
-            };
-
-            if(section.id) {
-                data['id'] = section.id;
-            }
-
-            return data;
-        });
-    }
-
-    cancel() {
-        // Delete any newly created attachments
-        var attachmentIds = [];
-
-        this.state.sections.forEach(function(section) {
-            section.attachments.forEach(function(attachment) {
-                if(!attachment.section) {
-                    attachmentIds.push(attachment.id);
-                }
-            });
-        });
-
-        if(attachmentIds.length) {
-            fetchPostJSON(constants.API_ROOT+'attachment/remove/', attachmentIds)
-            .then((json) => {
-                console.debug('success', json);
-            })
-            .catch((error) => {
-                console.error('error', error);
-            });
-        }
-
-        this.props.history.goBack();
-    }
-
-    save() {
-        var errors = [];
-
+    onSave() {
         if(!this.state.sections[0].title) {
-            errors.push("You must enter a Title.");
+            scrollTop();
+            this.setState({errors: ["You must enter a Title."]});
+        } else if(this.props.isOffline) {
+            this.saveOffline();
+        } else {
+            this.saveOnline();
         }
+    }
+        
+    saveOffline() {
+        if(this.state.id) {
+            var entry = this.props.entryMap.get(this.state.id).toJS();                
+            entry.sections = this.state.sections;
+            
+            this.props.dispatch(updateEntry(entry));
+            this.props.history.goBack();
+        } else {
+            var entry = {
+                id: uuid(),
+                shares: [],
+                tags: [],
+                sections: this.state.sections,
+                created_dt: moment.utc().format()
+            }
+            
+            this.props.dispatch(addEntry(entry));
+            this.props.history.goBack();            
+        }   
+    }
+    
+    saveAttachments(sectionJSON) {
+        return sectionJSON.attachments.map((attachment, i) => {
+            if(attachment.id) {
+                return Promise.resolve(null);
+            } 
+            
+            attachment.section = sectionJSON.id;
+             
+            return fetchPostJSON(constants.API_ROOT+'attachment/', attachment)
+                .then((json) => {
+                    console.debug('success', json);
+                    sectionJSON.attachments[i] = json;                    
+                })
+        }, this);
+    }
+        
+    saveOnline() {
+        var self = this;
+        var errors = [];
+        
+        showProgressModal('Saving Entry');
+       
+        if(this.state.id) {  
+            var entryJSON = this.props.entryMap.get(this.state.id).toJS();
 
-        if(errors.length) {
-            this.scrollTop();
-            this.setState({errors: errors});
-        } else if(this.state.id) {
-            fetchPatchJSON(constants.API_ROOT+'entry/'+this.state.id+'/', {
-                sections: this.getSectionsData()
-            })
-            .then((json) => {
-                console.debug('success', json);
-                this.props.dispatch(updateEntry(json));
-                this.props.history.goBack();
+            entryJSON.sections = this.state.sections;
+            
+            // Save new attachments, then save entry            
+            Promise.all(
+                this.saveAttachments(entryJSON.sections[0])
+            )
+            .then(() => {
+                return fetchPatchJSON(constants.API_ROOT+'entry/'+this.state.id+'/', {
+                    sections: entryJSON.sections
+                })
+                .then((json) => {
+                    console.debug('success', json);
+                    hideProgressModal();
+                    
+                    this.props.dispatch(updateEntry(json));
+                    this.props.history.goBack();
+                });
             })
             .catch((error) => {
+                // entryJSON will contain any changes that were saved
                 console.error('error', error);
-                if(error instanceof TypeError) {
-                    errors.push('You must be online to update an entry.');
-                } else if(error.detail) {
-                    for(var key in error.detail) {
-                        errors.push(error.detail[key]);
-                    }
-                } else {
-                    errors.push('Error updating entry: '+error.statusText);
-                }
+                hideProgressModal();
 
-                this.scrollTop();
-                this.setState({errors: errors});
+                if(error instanceof TypeError) {
+                    showConfirmModal(
+                        'No Network Connection',
+                        'Unable to update entry.  Do you want to switch to Offline Mode?',
+                        function() {
+                            self.props.dispatch(setIsOffline(true));
+                            self.props.dispatch(updateEntry(entryJSON));
+                            self.props.history.goBack();                          
+                        }
+                    );                        
+                } else {
+                    if(error.detail) {
+                        for(var key in error.detail) {
+                            errors.push(error.detail[key]);
+                        }
+                    } else {
+                        errors.push('Error updating entry: '+error.statusText);
+                    }
+
+                    scrollTop();
+                    this.setState({errors: errors});
+                }               
             });
         } else {
+            var entryJSON = {
+                id: uuid(),
+                shares: [],
+                tags: [],
+                sections: this.state.sections,
+                created_dt: moment.utc().format()
+            };
+            
+            // Save entry, then save all attachments
             fetchPostJSON(constants.API_ROOT+'entry/', {
-                sections: this.getSectionsData()
+                sections: [{
+                    title: this.state.sections[0].title,
+                    text: this.state.sections[0].text,
+                    attachments: [] // send attachments separately
+                }]
             })
             .then((json) => {
                 console.debug('success', json);
-                this.props.dispatch(addEntry(json));
-                this.props.history.goBack();
+                
+                entryJSON = json;              
+                entryJSON.sections[0].attachments = this.state.sections[0].attachments;
+                                                      
+                return Promise.all(
+                    this.saveAttachments(entryJSON.sections[0])
+                )
+                .then(() => {
+                    console.debug('success');
+                    hideProgressModal();
+
+                    this.props.dispatch(addEntry(entryJSON));
+                    this.props.history.goBack();
+                });
             })
             .catch((error) => {
                 console.error('error', error);
+                hideProgressModal();
+                
+                // entryJSON will contain any changes that were saved
                 if(error instanceof TypeError) {
-                    errors.push('You must be online to save an entry.');
-                } else if(error.detail) {
-                    for(var key in error.detail) {
-                        errors.push(error.detail[key]);
-                    }
+                    showConfirmModal(
+                        'No Network Connection',
+                        'Unable to save entry.  Do you want to switch to Offline Mode?',
+                        function() {
+                            self.props.dispatch(setIsOffline(true));
+                            self.props.dispatch(addEntry(entryJSON));                            
+                            self.props.history.goBack();                          
+                        }
+                    );                        
                 } else {
-                    errors.push('Error saving entry: '+error.statusText);
-                }
+                    if(error.detail) {
+                        for(var key in error.detail) {
+                            errors.push(error.detail[key]);
+                        }
+                    } else {
+                        errors.push('Error saving entry: '+error.statusText);
+                    }
 
-                this.scrollTop();
-                this.setState({errors: errors});
+                    scrollTop();
+                    this.setState({errors: errors});
+                }                
             });
         }
     }
@@ -488,9 +547,7 @@ class _EntryEdit extends React.Component {
         return (
             <span>
             {this.state.errors.map(function(error, i) {
-                return (
-                    <ErrorAlert key={i} msg={error} />
-                );
+                return (<ErrorAlert key={i} msg={error} />);
             }, this)}
 
             <form>
@@ -504,11 +561,7 @@ class _EntryEdit extends React.Component {
                     <textarea className="form-control" rows="6"
                         value={section.text} onChange={this.onChangeText} />
                 </div>
-                <input ref={(el) => {this.fileInput = el;}} type="file" style={{display: 'none'}}
-                    onChange={this.uploadFile}
-                />
             </form>
-
             <div className="row">
                 <div className="col-xs-12" style={{
                     padding: '12px 15px',
@@ -533,12 +586,13 @@ class _EntryEdit extends React.Component {
                             cursor: 'pointer'
                         }}>
                         <i className="fa fa-plus" aria-hidden="true"></i>
-                        &nbsp;Upload File
-                        &nbsp;<i className="fa fa-caret-down fa-lg" aria-hidden="true"></i>
+                        &nbsp;Upload File &nbsp;
+                        {(this.props.isOffline) ? null : (
+                            <i className="fa fa-caret-down fa-lg" aria-hidden="true"></i>
+                        )}
                     </label>
                </div>
             </div>
-
             <div className="row">
                 <div className="col-xs-12" style={{
                     padding: '12px 15px',
@@ -556,20 +610,25 @@ class _EntryEdit extends React.Component {
                     }, this)}
                 </div>
             </div>
-
             <div className="row">
                 <div className="hidden-xs col-sm-12">
                     <button className="btn btn-raised btn-primary text-success"
-                        onClick={(e) => { this.save(); }}
+                        onClick={(e) => { this.onSave(); }}
                         style={{marginRight:'16px'}}>
                         Save
                     </button>
                     <button className="btn btn-raised btn-default"
-                        onClick={(e) => { this.cancel(); }}>
+                        onClick={(e) => { this.props.history.goBack(); }}>
                         Cancel
                     </button>
                 </div>
             </div>
+
+            <form ref={(el) => {this.fileInputForm = el;}}>
+                <input ref={(el) => {this.fileInput = el;}} type="file" style={{display:'none'}}
+                    onChange={this.uploadFile}
+                />
+            </form>
 
             <UploadPopoverMenu
                 rootClose={true}
@@ -584,17 +643,18 @@ class _EntryEdit extends React.Component {
             />
 
             <AttachmentPopoverMenu
-                rootClose={true}
-                animation={false}
                 show={this.state.showAttachmentMenu}
                 onHide={() => this.setState({showAttachmentMenu: false})}
                 target={this.state.menuTarget}
                 placement="top"
                 container={this}
                 onView={(e) => this.viewAttachment(this.state.curAttachmentIndex)}
-                onTrash={(e) => this.trashAttachment(this.state.curAttachmentIndex)}
+                onDownload={(e) => this.downloadAttachment(this.state.curAttachmentIndex)}
+                onTrash={(e) => this.trashAttachment(this.state.curAttachmentIndex)}  
+                isOffline={this.props.isOffline}  
+                attachment={this.state.curAttachment}         
             />
-
+                            
             <CustomGooglePicker ref={(el) => {this.googlePicker = el;}}
                 clientId={constants.AUTH.service.GoogleDrive.client_id}
                 developerKey={constants.AUTH.service.GoogleDrive.developer_key}
@@ -623,6 +683,7 @@ class _EntryEdit extends React.Component {
 
 function mapStateToProps(state) {
     return {
+        isOffline: state.get('isOffline', false),
         user: state.get('user', new Map()),
         awardMap: state.getIn(['awards', 'itemsById'], new Map()),
         awardList: state.getIn(['awards', 'items'], new List()),

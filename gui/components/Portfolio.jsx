@@ -3,23 +3,26 @@ import ReactDOM from 'react-dom';
 import {connect} from 'react-redux';
 import {Link, withRouter} from 'react-router-dom';
 import {List, Map, Set} from 'immutable';
+import uuid from 'uuid-random';
 import {Popover, Overlay} from 'react-bootstrap';
 import Truncate from 'react-truncate';
 import moment from 'moment';
 import * as constants from '../constants';
 import {
     fetchGetJSON, fetchPostJSON, fetchPatchJSON, fetchDeleteJSON,
-    addEntry, updateEntryTags, deleteEntry,
-    addShare, deleteShare} from '../action_creators';
+    addEntry, updateEntryTags, deleteEntry, setIsOffline
+} from '../action_creators';
 import {
-    getAttachmentIcon, getShareWarning, ErrorAlert, InfoAlert, LoadingIndicator,
-    ViewCount, SharePanel
+    isOnline, downloadAttachment, isImageAttachment, getAttachmentIcon, getShareWarning, 
+    ErrorAlert, InfoAlert, LoadingIndicator, ViewCount, SharePanel
 } from './common.jsx';
 import {FilterModal, FilterBar} from './Filter.jsx';
 import {
-    showErrorModal, showInfoModal, showConfirmModal,
-    SharePublicLinkModal, ShareEmbedModal, ShareBlockedModal} from './Modals.jsx';
+    showErrorModal, showInfoModal, showConfirmModal, ShareDetailsModal, showImageModal
+} from './Modals.jsx';
 import {Tags} from './Tags.jsx';
+import {Sharer} from './Sharer.jsx'
+
 
 class PortfolioListItem extends React.Component {
     constructor(props) {
@@ -27,21 +30,68 @@ class PortfolioListItem extends React.Component {
 
         this.state = {};
 
+        this.onClickAttachment = (attachment, isImage) => {
+            if(!isImage) {
+                showErrorModal('Offline Mode', 'You must be online to view this attachment.');
+            } else if(this.props.isOffline) {
+                showImageModal(attachment.label, attachment.data_uri);
+            } else {
+                showImageModal(attachment.label, attachment.hyperlink);            
+            }
+        }
+
         this.getAttachmentIcon = (attachment) => {
-            if(attachment.award) {
-                var award = this.props.awardMap.get(attachment.award);
-                return (
-                    <img src={award.get('badge_image_data_uri')} height="56" />
-                );
-            }
+            return getAttachmentIcon(
+                attachment, this.props.awardMap.get(attachment.award), 56, 'fa-4x'
+            );
+        }
 
-            if(attachment.data_uri) {
-                return (
-                    <img src={attachment.data_uri} height="56" />
-                );
-            }
+        this.getAttachmentLink = (attachment) => {
+            var isImage = isImageAttachment(attachment);
 
-            return getAttachmentIcon(attachment.file, attachment.label, 56, 'fa-4x');
+            if(this.props.isOffline) {
+                // Pass all non-downloads to click handler
+                if(attachment.id 
+                || !attachment.fileSize
+                || (window.navigator.standalone && !isImage))
+                {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, false); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else if(isImage) {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, true); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else {
+                    return (
+                        <a href={attachment.data_uri} download={attachment.label} target="_blank">
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                }
+            } else {
+                if(isImage) {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, true); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else {
+                    return (
+                        <a href={attachment.hyperlink} title={attachment.label} 
+                            target="_blank">
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                }
+            }
         }
 
         this.saveTags = (value) => {
@@ -52,9 +102,14 @@ class PortfolioListItem extends React.Component {
             this.props.onClick(this.props.entry.id);
         }
 
+       this.onClickViewCount = (e) => {
+            this.props.onShareDetails(this.props.entry.id);
+        }
+
         this.onShowMenu = (e) => {
             this.props.onShowMenu(e, this.props.entry.id);
         }
+
     }
 
     render() {
@@ -64,13 +119,11 @@ class PortfolioListItem extends React.Component {
 
         if(section.attachments.length) {
             attachments = (
-                <div className="clearfix" style={{padding: '6px 0'}}>
+                <div className="clearfix" style={{padding:'6px 0'}}>
                 {section.attachments.slice(0, 3).map(function(attachment, i) {
                     return (
-                        <span className="pull-left" style={{marginRight: '6px'}}>
-                            <a target="_blank" href={attachment.hyperlink} title={attachment.label}>
-                            {this.getAttachmentIcon(attachment)}
-                            </a>
+                        <span className="pull-left" style={{marginRight:'6px'}}>
+                            {this.getAttachmentLink(attachment)}
                         </span>
                     );
                 }, this)}
@@ -97,7 +150,11 @@ class PortfolioListItem extends React.Component {
                             </span>
                         </a>
                     </div>
-                    <ViewCount shares={entry.shares} shareMap={this.props.shareMap} />
+                    <ViewCount 
+                        shares={entry.shares} 
+                        shareMap={this.props.shareMap} 
+                        onClick={this.onClickViewCount}
+                    />
                     <p className="list-group-item-text">
                         <small>{moment(entry.created_dt).format('MMMM Do, YYYY')}</small>
                     </p>
@@ -126,6 +183,8 @@ class PortfolioListItem extends React.Component {
                             shares={entry.shares}
                             shareMap={this.props.shareMap}
                             handleShare={this.props.onShare}
+                            isOffline={this.props.isOffline}
+                            isInvalid={false}
                         />
                     </div>
                     <Tags
@@ -166,7 +225,7 @@ class PortfolioPopoverMenu extends React.Component {
                         </li>
                         <li style={{padding:'8px 0'}}>
                             <a href='javascript:void(0)' onClick={this.props.onTrash}>
-                                <i className="fa fa-trash"/> Trash
+                                <i className="fa fa-trash"/> Remove
                             </a>
                         </li>
                     </ul>
@@ -179,26 +238,6 @@ class PortfolioPopoverMenu extends React.Component {
 class _Portfolio extends React.Component {
     constructor(props) {
         super(props);
-
-        this.state = {
-            showMenu: false,
-            menuTarget: null,
-            curEntryId: '', // active entry for PortfolioPopoverMenu
-            entryList: this.filterEntries(props)
-        };
-
-        this.isOnline = (action, callback) => {
-            fetchGetJSON(constants.API_ROOT+'me/test/')
-                .then(() => {
-                    callback();     
-                })
-                .catch((error) => {
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to '+action+'.';
-                    }                    
-                    showErrorModal('No Network Connection', error);
-                });
-        }
         
         this.showPopoverMenu = (e, id) => {
             e.preventDefault();     // prevent transition
@@ -218,35 +257,100 @@ class _Portfolio extends React.Component {
 
 // Add
         this.addEntry = () => {
-            this.isOnline('add an entry', () => {
-                this.props.history.push('/entry/edit');            
-            });
+            // Always allow, check for network connection on save
+            this.props.history.push('/entry/edit');            
         }
         
 // Edit
         this.editEntry = (id) => {
+            // Always allow, check for network connection on save
             this.setState({showMenu: false});
-            
-            this.isOnline('edit an entry', () => {
-                this.props.history.push('/entry/edit/'+id);
-            });
+            this.props.history.push('/entry/edit/'+id);   
         }
 
 // Copy
-        this.copyEntry = (id) => {
-            this.setState({showMenu: false});
-
-            fetchPostJSON(constants.API_ROOT+'entry/'+id+'/copy/')
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(addEntry(json));
-                }).catch((error) => {
-                    console.error('error', error);
-                     if(error instanceof TypeError) {
-                        error = 'You must be online to copy an entry.';
-                    }
-                   showErrorModal('Error Copying Entry', error);
+        this.copyEntryOffline = (id) => {
+            var entry = this.props.entryMap.get(id).toJS();
+            
+            var sections = entry.sections.map(function(section, i) {
+                var attachments = section.attachments.map(function(attachment, j) {
+                    if(attachment.file) {
+                        // file-based, must have been synced
+                        return {
+                            label: attachment.label,
+                            copy: attachment.id,                                
+                            data_uri: attachment.data_uri
+                        };
+                    } else if(attachment.award) {
+                        // award-based
+                        return {
+                            label: attachment.label,
+                            award: attachment.award
+                       };
+                    } else if(attachment.id) {
+                        // hyperlink-based
+                        return {
+                            label: attachment.label,
+                            hyperlink: attachment.hyperlink
+                        };         
+                    } else {
+                        // unsynced attachment, must have hyperlink or data-uri
+                        // If was upload, will have non-zero fileSize
+                        return {
+                            label: attachment.label,
+                            hyperlink: attachment.hyperlink,
+                            data_uri: attachment.data_uri,
+                            fileSize: attachment.fileSize || 0
+                        };
+                    }       
                 });
+                    
+                return {
+                    title: section.title+' (Copy)',
+                    text: section.text,
+                    attachments: attachments     
+                };
+            });
+                
+            var entry = {
+                id: uuid(),
+                shares: [],
+                tags: entry.tags,
+                sections: sections,
+                created_dt: moment.utc().format()
+            }
+            
+            this.props.dispatch(addEntry(entry));
+        }
+        
+        this.copyEntry = (id) => {
+            var self = this;
+            
+            this.setState({showMenu: false});
+            
+            if(this.props.isOffline) {
+                this.copyEntryOffline(id);
+            } else {
+                fetchPostJSON(constants.API_ROOT+'entry/'+id+'/copy/')
+                    .then((json) => {
+                        console.debug('success', json);
+                        this.props.dispatch(addEntry(json));
+                    }).catch((error) => {
+                        console.error('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to copy entry.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.copyEntryOffline(id);
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Copying Entry', error);
+                        }
+                    });
+            }
         }
 
 // Trash
@@ -267,163 +371,79 @@ class _Portfolio extends React.Component {
         }
 
         this.trashEntry = (confirm) => {
+            var self = this;
             var id = this.state.curEntryId;
-            var shares = this.props.entryMap.getIn([id, 'shares']);
 
-            fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
-                .then(json => {
-                    this.props.dispatch(deleteEntry(id));
-                })
-                .catch(error => {
-                    console.error('error deleting entry', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete an entry.';
-                    }
-                    showErrorModal('Error Deleting Entry', error);
-                });
+            if(this.props.isOffline) {
+                this.props.dispatch(deleteEntry(id));
+            } else {
+                fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
+                    .then(json => {
+                        this.props.dispatch(deleteEntry(id));
+                    })
+                    .catch(error => {
+                        console.error('error deleting entry', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to delete entry.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(deleteEntry(id));
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Deleting Entry', error);
+                        }
+                    });
+            }
         }
 
 // Share
-        this.deleteShareConfirm = (shareId) => {
-            var created_dt = this.props.shareMap.getIn([shareId, 'created_dt']);
-
-            showConfirmModal(
-                "Do you want to delete the share you created on "+moment(created_dt).format('MM/DD/YYYY')+"?",
-                this.deleteShare.bind(this, shareId)
-            );
-        }
-
-        this.deleteShare = (shareId) => {
-            fetchDeleteJSON(constants.API_ROOT+'share/'+shareId+'/')
-                .then(() => {
-                    console.debug('success');
-                    this.props.dispatch(deleteShare(shareId));
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete a share.';
-                    }
-                    showErrorModal('Error Deleting Share', error);
-                });
+        this.showShareDetails = (entryId) => {    
+            ShareDetailsModal.show(this.props.entryMap.getIn([entryId, 'shares']));
         }
 
         this.handleShare = (id, shareType, shareId) => {
             var entry = this.props.entryMap.get(id);
-
+            
             if(shareId) {
-                switch(shareType) {
-                    case 'type_link':
-                        var shareUrl = this.props.shareMap.getIn([shareId, 'url']);
-                        SharePublicLinkModal.show(shareId, shareUrl);
-                        break;
-                    
-                    case 'type_embed':
-                        var shareUrl = this.props.shareMap.getIn([shareId, 'url']);
-                        ShareEmbedModal.show(shareId, shareUrl+'?embed=1');
-                        break;
-                    
-                    default:
-                        this.deleteShareConfirm(shareId);
-                        break;
-                }
+                this.sharer.viewShare(shareId);
+            } else if(this.props.isOffline) {
+                showErrorModal('Offline Mode', 'You must be online to share an entry.');
             } else {
-                fetchPostJSON(constants.API_ROOT+'share/', {
-                    content_type: 'entry',
-                    object_id: id,
-                    type: shareType
-                })
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(addShare(json));
-                    this.handlePostShare(entry, json.url, shareType);
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to share an entry.';
-                    }
-                    showErrorModal('Error Creating Share', error);
-                });
-            }
-        }
-
-        this.handlePostShare = (entry, shareUrl, shareType) => {
-            var section = entry.get('sections').first();
-            var openService = '';
-            var openURL = '';
-
-            switch(shareType) {
-                case 'type_link':
-                    SharePublicLinkModal.show(null, shareUrl);
-                    return;
-
-                case 'type_embed':
-                    ShareEmbedModal.show(null, shareUrl+'?embed=1');
-                    return;
-
-                case 'type_facebook':
-                    openService = 'Facebook';
-                    openURL = 'https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(shareUrl);
-                    break;
-
-                case 'type_twitter':
-                    var title = section.get('title');
-                    openService = 'Twitter';
-                    openURL = 'https://twitter.com/intent/tweet?text='+encodeURIComponent(title+' '+shareUrl);
-                    break;
-
-                case 'type_pinterest':
-                    var media_url;
-                    
-                    if(/\/$/.test(constants.APP_ROOT)) {
-                        media_url = constants.APP_ROOT+'img/ePortfolioPinterestImage.png';
-                    } else {
-                        media_url = constants.APP_ROOT+'/img/ePortfolioPinterestImage.png';
-                    }
-                    
-                    var url = encodeURIComponent(shareUrl);
-                    var media = encodeURIComponent(media_url);
-                
-                    openService = 'Pinterest';
-                    openURL = 'https://pinterest.com/pin/create/button/'+'?url='+url+'&media='+media+'&description=';
-                    break;
-
-                case 'type_googleplus':
-                    openService = 'Google Plus';
-                    openURL = 'https://plus.google.com/share?url='+encodeURIComponent(shareUrl);
-                    break;
-
-                case 'type_linkedin':
-                    var url = encodeURIComponent(shareUrl);
-                    var title = encodeURIComponent(section.get('title'));
-
-                    openService = 'LinkedIn';
-                    openURL = 'https://www.linkedin.com/shareArticle?mini=true&url='+url+'&title='+title+'&summary=&source=';
-                    break;
-            }
-
-            var newWindow = window.open(openURL, '_blank', 'width=600,height=600');
-
-            if (newWindow == null || typeof(newWindow) == 'undefined') {
-                ShareBlockedModal.show(openService, openURL);
+                this.sharer.createShare(shareType, entry.toJSON());
             }
         }
 
 // Tags (called from PortfolioListItem)
         this.saveTags = (entryId, value) => {
-            fetchPostJSON(constants.API_ROOT+'entry/'+entryId+'/tags/', value)
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(updateEntryTags(entryId, json.tags));
-                })
-                .catch((error) => {
-                    console.log('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to modify tags.'
-                    }
-                    showErrorModal('Error Saving tags', error);
-                });
+            var self = this;
+            
+            if(this.props.isOffline) {
+                this.props.dispatch(updateEntryTags(entryId, value.toJSON().sort()));
+            } else {
+                fetchPostJSON(constants.API_ROOT+'entry/'+entryId+'/tags/', value)
+                    .then((json) => {
+                        console.debug('success', json);
+                        this.props.dispatch(updateEntryTags(entryId, json.tags));
+                    })
+                    .catch((error) => {
+                        console.log('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to update tags.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(updateEntryTags(entryId, value.toJSON().sort()));                         
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Saving Tags', error);
+                        }
+                    });
+            }
         }
 
 // Filter
@@ -432,6 +452,13 @@ class _Portfolio extends React.Component {
         }
 
         this.filterEntries = this.filterEntries.bind(this);
+
+        this.state = {
+            showMenu: false,
+            menuTarget: null,
+            curEntryId: '', // active entry for PortfolioPopoverMenu
+            entryList: this.filterEntries(props)
+        };
     }
 
     filterEntries(props) {
@@ -457,8 +484,12 @@ class _Portfolio extends React.Component {
             var item = entryMap.get(itemId);
             var date_created = item.get('created_dt');
 
+            if(item.get('is_deleted')) {
+                return false;   // Never show deleted
+            }
+
             if(item.get('award')) {
-                return false; // Don't show pledges for now
+                return false;   // Don't show pledges for now
             }
                       
             if(startDate && (date_created < startDate)) {
@@ -527,6 +558,8 @@ class _Portfolio extends React.Component {
                         onShowMenu={this.showPopoverMenu}
                         onSaveTags={this.saveTags}
                         onShare={this.handleShare}
+                        onShareDetails={this.showShareDetails}
+                        isOffline={this.props.isOffline}
                     />
                 );
             }, this);
@@ -550,9 +583,9 @@ class _Portfolio extends React.Component {
                     />
                 </div>
             </div>
-
             <div className="row">
                 <div className="col-xs-12 filteredContentContainer">
+                {(this.props.loading || this.props.error) ? null : (
                     <a href="javascript:void(0)" onClick={this.addEntry} style={{
                         display: 'block',
                         backgroundColor: '#a9a6a6',
@@ -569,7 +602,7 @@ class _Portfolio extends React.Component {
                         <i className="fa fa-plus-circle" aria-hidden="true" />
                         &nbsp;Add New ePortfolio Entry
                     </a>
-
+                )}
                     <div className="list-group">
                         {content}
                     </div>
@@ -597,9 +630,15 @@ class _Portfolio extends React.Component {
                 attrs={this.props.attrs}
             />
 
-            <SharePublicLinkModal onDelete={this.deleteShareConfirm} />
-            <ShareEmbedModal onDelete={this.deleteShareConfirm} />
-            <ShareBlockedModal />
+            <Sharer ref={(el) => {this.sharer = el;}}
+                contentType='entry' 
+                dispatch={this.props.dispatch} 
+                shareMap={this.props.shareMap} 
+                isOffline={this.props.isOffline}
+            />
+            
+            <ShareDetailsModal shareMap={this.props.shareMap} />
+
             </span>
         );
     }
@@ -607,6 +646,7 @@ class _Portfolio extends React.Component {
 
 function mapStateToProps(state) {
     return {
+        isOffline: state.get('isOffline', false),
         user: state.get('user', new Map()),
         filter: state.getIn(['filter', constants.TAG_TYPE.Entry], new Map()),
         tags: state.getIn(['tags', constants.TAG_TYPE.Entry], new List()),

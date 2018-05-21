@@ -3,17 +3,22 @@ import ReactDOM from 'react-dom';
 import {Link, withRouter} from 'react-router-dom';
 import {connect} from 'react-redux';
 import {List, Map, Set} from 'immutable';
+import uuid from 'uuid-random';
 import moment from 'moment';
 import * as constants from '../constants';
-import {getAttachmentIcon, getShareWarning, ErrorAlert, SharePanel} from './common.jsx';
+import {
+    isOnline, isImageAttachment, getAttachmentIcon, getShareWarning, 
+    ErrorAlert, SharePanel
+} from './common.jsx';
 import {
     fetchGetJSON, fetchPostJSON, fetchPatchJSON, fetchDeleteJSON,
-    updateEntryTags, addEntry, deleteEntry,
-    addShare, deleteShare} from '../action_creators';
+    addEntry, updateEntryTags, deleteEntry, setIsOffline
+} from '../action_creators';
 import {
-    showErrorModal, showInfoModal, showConfirmModal,
-    SharePublicLinkModal, ShareEmbedModal, ShareBlockedModal} from './Modals.jsx';
+    showErrorModal, showInfoModal, showConfirmModal, showImageModal
+} from './Modals.jsx';
 import {Tags} from './Tags.jsx';
+import {Sharer} from './Sharer.jsx'
 
 
 class _EntryView extends React.Component {
@@ -24,58 +29,156 @@ class _EntryView extends React.Component {
             entry: props.entryMap.get(props.match.params.entryId, Map()).toJS()
         };
 
-        this.isOnline = (action, callback) => {
-            fetchGetJSON(constants.API_ROOT+'me/test/')
-                .then(() => {
-                    callback();     
-                })
-                .catch((error) => {
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to '+action+'.';
-                    }                    
-                    showErrorModal('No Network Connection', error);
-                });
+// Attachments        
+        this.onClickAttachment = (attachment, isImage) => {
+            if(!isImage) {
+                showErrorModal('Offline Mode', 'You must be online to view this attachment.');
+            } else if(this.props.isOffline) {
+                showImageModal(attachment.label, attachment.data_uri);
+            } else {
+                showImageModal(attachment.label, attachment.hyperlink);            
+            }
         }
 
         this.getAttachmentIcon = (attachment) => {
-            if(attachment.award) {
-                var award = this.props.awardMap.get(attachment.award);
-                return (
-                    <img src={award.get('badge_image_data_uri')} height="70" />
-                );
-            }
+            return getAttachmentIcon(
+                attachment, this.props.awardMap.get(attachment.award), 70, 'fa-5x'
+            );
+        }
 
-            if(attachment.data_uri) {
-                return (
-                    <img src={attachment.data_uri} height="70" />
-                );
+        this.getAttachmentLink = (attachment) => {
+            var isImage = isImageAttachment(attachment);
+            
+            if(this.props.isOffline) {
+                // Pass all non-downloads to click handler
+                if(attachment.id       
+                || !attachment.fileSize
+                || (window.navigator.standalone && !isImage))
+                {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, false); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else if(isImage) {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, true); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else {
+                    return (
+                        <a href={attachment.data_uri} download={attachment.label} target="_blank">
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                }
+            } else {
+                // Pass all non-direct views to click handler
+                if(isImage) {
+                    return (
+                        <a href="javascript:void(0);" title={attachment.label} 
+                            onClick={(e) => { this.onClickAttachment(attachment, true); }}>
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                } else {
+                    return (
+                        <a href={attachment.hyperlink} title={attachment.label} target="_blank">
+                            {this.getAttachmentIcon(attachment)}
+                        </a>
+                    );
+                }         
             }
-
-            return getAttachmentIcon(attachment.file, attachment.label, 70, 'fa-5x');
         }
 
 // Edit
         this.editEntry = (e) => {
-            this.isOnline('edit an entry', () => {
-                this.props.history.push('/entry/edit/'+this.state.entry.id);
-            });
+            this.props.history.push('/entry/edit/'+this.state.entry.id);
         }
         
 // Copy
-        this.copyEntry = (e) => {
-            fetchPostJSON(constants.API_ROOT+'entry/'+this.state.entry.id+'/copy/')
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(addEntry(json));
-                    this.props.history.push('/entry/view/'+json.id+'/');
-                }).catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to copy an entry.';
-                    }
-                    showErrorModal('Error Copying Entry', error);
+        this.copyEntryOffline = () => {
+            var sections = this.state.entry.sections.map(function(section, i) {
+                var attachments = section.attachments.map(function(attachment, j) {
+                    if(attachment.file) {
+                        // file-based, must have been synced
+                        return {
+                            label: attachment.label,
+                            copy: attachment.id,                                
+                            data_uri: attachment.data_uri
+                        };
+                    } else if(attachment.award) {
+                        // award-based
+                        return {
+                            label: attachment.label,
+                            award: attachment.award
+                        };
+                    } else if(attachment.id) {
+                        // hyperlink-based
+                        return {
+                            label: attachment.label,
+                            hyperlink: attachment.hyperlink
+                        };         
+                    } else {
+                        // unsynced attachment, must have hyperlink or data-uri
+                        return {
+                            label: attachment.label,
+                            hyperlink: attachment.hyperlink,
+                            data_uri: attachment.data_uri,
+                            fileSize: attachment.fileSize || 0
+                        };
+                    }       
                 });
-          
+                
+                return {
+                    title: section.title+' (Copy)',
+                    text: section.text,
+                    attachments: attachments     
+                };
+            });
+            
+            var entry = {
+                id: uuid(),
+                shares: [],
+                tags: this.state.entry.tags,
+                sections: sections,
+                created_dt: moment.utc().format()
+            }
+            
+            this.props.dispatch(addEntry(entry));
+            this.props.history.push('/entry/view/'+entry.id+'/');  
+        }
+
+        this.copyEntry = (e) => {
+            var self = this;
+
+            if(this.props.isOffline) {
+                this.copyEntryOffline();
+            } else {
+                fetchPostJSON(constants.API_ROOT+'entry/'+this.state.entry.id+'/copy/')
+                    .then((json) => {
+                        console.debug('success', json);
+                        this.props.dispatch(addEntry(json));
+                        this.props.history.push('/entry/view/'+json.id+'/');
+                    }).catch((error) => {
+                        console.error('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to copy entry.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.copyEntryOffline();
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Copying Entry', error);
+                        }
+                    });
+            }  
         }
 
 // Trash
@@ -94,163 +197,77 @@ class _EntryView extends React.Component {
         }
 
         this.trashEntry = () => {
+            var self = this;
             var id = this.state.entry.id;
 
-            fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
-                .then(json => {
-                    this.props.dispatch(deleteEntry(id));
-                    this.props.history.goBack();
-                })
-                .catch(error => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete an entry.';
-                    }
-                    showErrorModal('Error Deleting Entry', error);
-                });
+            if(this.props.isOffline) {
+                this.props.dispatch(deleteEntry(id));
+                this.props.history.goBack();
+            } else {
+                fetchDeleteJSON(constants.API_ROOT+'entry/'+id+'/')
+                    .then(json => {
+                        this.props.dispatch(deleteEntry(id));
+                        this.props.history.goBack();
+                    })
+                    .catch(error => {
+                        console.error('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to delete entry.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(deleteEntry(id));
+                                    self.props.history.goBack();
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Deleting Entry', error);
+                        }
+                    });
+            }
         }
 
 // Share
-        this.deleteShareConfirm = (shareId) => {
-            var created_dt = this.props.shareMap.getIn([shareId, 'created_dt']);
-
-            showConfirmModal(
-                "Do you want to delete the share you created on "+moment(created_dt).format('MM/DD/YYYY')+"?",
-                this.deleteShare.bind(this, shareId)
-            );
-        }
-
-        this.deleteShare = (shareId) => {
-            fetchDeleteJSON(constants.API_ROOT+'share/'+shareId+'/')
-                .then(() => {
-                    console.debug('success');
-                    this.props.dispatch(deleteShare(shareId));
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to delete a share.';
-                    }
-                    showErrorModal('Error Deleting Share', error);
-                });
-        }
-
         this.handleShare = (id, shareType, shareId) => {
             if(shareId) {
-                switch(shareType) {
-                    case 'type_link':
-                        var shareUrl = this.props.shareMap.getIn([shareId, 'url']);
-                        SharePublicLinkModal.show(shareId, shareUrl);
-                        break;
-
-                    case 'type_embed':
-                        var shareUrl = this.props.shareMap.getIn([shareId, 'url']);
-                        ShareEmbedModal.show(shareId, shareUrl+'?embed=1');
-                        break;
-
-                    default:
-                        this.deleteShareConfirm(shareId);
-                        break;
-                }
+                this.sharer.viewShare(shareId);
+            } else if(this.props.isOffline) {
+                showErrorModal('Offline Mode', 'You must be online to share an entry.');
             } else {
-                fetchPostJSON(constants.API_ROOT+'share/', {
-                    content_type: 'entry',
-                    object_id: id,
-                    type: shareType
-                })
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(addShare(json));
-                    this.handlePostShare(json.url, shareType);
-                })
-                .catch((error) => {
-                    console.error('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to share an entry.';
-                    }
-                    showErrorModal('Error Creating Share', error);
-                });
-            }
-        }
-
-        this.handlePostShare = (shareUrl, shareType) => {
-            var section = this.state.entry.sections[0];
-            var openService = '';
-            var openURL = '';
-
-            switch(shareType) {
-                case 'type_link':
-                    SharePublicLinkModal.show(null, shareUrl);
-                    return;
-
-                case 'type_embed':
-                    ShareEmbedModal.show(null, shareUrl+'?embed=1');
-                    return;
-
-                case 'type_facebook':
-                    openService = 'Facebook';
-                    openURL = 'https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(shareUrl);
-                    break;
-
-                case 'type_twitter':
-                    var title = section.title;
-                    openService = 'Twitter';
-                    openURL = 'https://twitter.com/intent/tweet?text='+encodeURIComponent(title+' '+shareUrl);
-                    break;
-
-                case 'type_pinterest':
-                    var media_url;
-
-                    if(/\/$/.test(constants.APP_ROOT)) {
-                        media_url = constants.APP_ROOT+'img/ePortfolioPinterestImage.png';
-                    } else {
-                        media_url = constants.APP_ROOT+'/img/ePortfolioPinterestImage.png';
-                    }
-
-                    var url = encodeURIComponent(shareUrl);
-                    var media = encodeURIComponent(media_url);
-
-                    openService = 'Pinterest';
-                    openURL = 'https://pinterest.com/pin/create/button/'+'?url='+url+'&media='+media+'&description=';
-                    break;
-
-                case 'type_googleplus':
-                    openService = 'Google Plus';
-                    openURL = 'https://plus.google.com/share?url='+encodeURIComponent(shareUrl);
-                    break;
-
-                case 'type_linkedin':
-                    var url = encodeURIComponent(shareUrl);
-                    var title = encodeURIComponent(section.title);
-
-                    openService = 'LinkedIn';
-                    openURL = 'https://www.linkedin.com/shareArticle?mini=true&url='+url+'&title='+title+'&summary=&source=';
-                    break;
-            }
-
-            var newWindow = window.open(openURL, '_blank', 'width=600,height=600');
-
-            if (newWindow == null || typeof(newWindow) == 'undefined') {
-                ShareBlockedModal.show(openService, openURL);
+                this.sharer.createShare(shareType, this.state.entry);
             }
         }
 
 // Tags
         this.saveTags = (value) => {
+            var self = this;
             var id = this.state.entry.id;
 
-            fetchPostJSON(constants.API_ROOT+'entry/'+id+'/tags/', value)
-                .then((json) => {
-                    console.debug('success', json);
-                    this.props.dispatch(updateEntryTags(id, json.tags));
-                })
-                .catch((error) => {
-                    console.log('error', error);
-                    if(error instanceof TypeError) {
-                        error = 'You must be online to modify tags.'
-                    }
-                    showErrorModal('Error Saving tags', error);
-                });
+            if(this.props.isOffline) {
+                this.props.dispatch(updateEntryTags(id, value.toJSON().sort()));
+            } else {
+                fetchPostJSON(constants.API_ROOT+'entry/'+id+'/tags/', value)
+                    .then((json) => {
+                        console.debug('success', json);
+                        this.props.dispatch(updateEntryTags(id, json.tags));
+                    })
+                    .catch((error) => {
+                        console.log('error', error);
+                        if(error instanceof TypeError) {
+                            showConfirmModal(
+                                'No Network Connection',
+                                'Unable to update tags.  Do you want to switch to Offline Mode?',
+                                function() {
+                                    self.props.dispatch(setIsOffline(true));
+                                    self.props.dispatch(updateEntryTags(id, value.toJSON().sort()));                         
+                                }
+                            );                        
+                        } else {
+                            showErrorModal('Error Saving tags', error);
+                        }
+                    });
+            }
         }
     }
 
@@ -275,7 +292,6 @@ class _EntryView extends React.Component {
             <span>
 
             {entry.sections.map(function(section, i) {
-
                 return (
                     <span>
                     <div key={i} className="row">
@@ -293,12 +309,10 @@ class _EntryView extends React.Component {
                     </div>
                     <div key={i+'_att'} className="row">
                         <div className="col-xs-12">
-                        {section.attachments.map(function(attachment, j) {
+                        {section.attachments.map(function(attachment, j) {                            
                             return (
                                 <span key={j} className="pull-left" style={{margin: '0 12px 12px 0'}}>
-                                    <a target="_blank" href={attachment.hyperlink} title={attachment.label}>
-                                    {this.getAttachmentIcon(attachment)}
-                                    </a>
+                                    {this.getAttachmentLink(attachment)}
                                 </span>
                             );
                         }, this)}
@@ -314,15 +328,15 @@ class _EntryView extends React.Component {
                     fontSize: '1.1em'
                 }}>
                     <a href="javascript:void(0)" onClick={this.editEntry}>
-                        <i className="fa fa-pencil"/> Edit
+                        <i className="fa fa-pencil" aria-hidden="true" /> Edit
                     </a>
                     &nbsp;&nbsp;&nbsp;
                     <a href="javascript:void(0)" onClick={this.copyEntry}>
-                        <i className="fa fa-clone"/> Copy
+                        <i className="fa fa-clone" aria-hidden="true" /> Copy
                     </a>
                     &nbsp;&nbsp;&nbsp;
                     <a href="javascript:void(0)" onClick={this.trashEntryConfirm}>
-                        <i className="fa fa-trash"/> Trash
+                        <i className="fa fa-trash" aria-hidden="true" /> Remove
                     </a>
                 </div>
             </div>
@@ -336,10 +350,11 @@ class _EntryView extends React.Component {
                         shares={entry.shares}
                         shareMap={this.props.shareMap}
                         handleShare={this.handleShare}
+                        isOffline={this.props.isOffline}
+                        isInvalid={false}
                     />
                 </div>
             </div>
-
             <div className="row">
                 <div className="col-xs-12" style={{
                     padding: '12px 15px',
@@ -355,9 +370,12 @@ class _EntryView extends React.Component {
                 </div>
             </div>
 
-            <SharePublicLinkModal onDelete={this.deleteShareConfirm} />
-            <ShareEmbedModal onDelete={this.deleteShareConfirm} />
-            <ShareBlockedModal />
+            <Sharer ref={(el) => {this.sharer = el;}}
+                contentType='entry' 
+                dispatch={this.props.dispatch} 
+                shareMap={this.props.shareMap} 
+                isOffline={this.props.isOffline}
+            />
             </span>
         );
     }
@@ -365,10 +383,10 @@ class _EntryView extends React.Component {
 
 function mapStateToProps(state) {
     return {
+        isOffline: state.get('isOffline', false),
         user: state.get('user', new Map()),
         tags: state.get('tags', List()).get(constants.TAG_TYPE.Entry) || List(),
         awardMap: state.getIn(['awards', 'itemsById'], new Map()),
-        awardList: state.getIn(['awards', 'items'], new List()),
         entryMap: state.getIn(['entries', 'itemsById'], new Map()),
         shareMap: state.getIn(['shares', 'itemsById'], new Map())
     };

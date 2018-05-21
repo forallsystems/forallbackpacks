@@ -14,29 +14,54 @@
 {% block content %}
 <div class="row">
   <div class="col-sm-4 text-center">
-    {% if embed %}
+{% if embed %}
     <a href="?embed=0" target="_blank">
-    {% endif %}
+{% endif %}
     <img id="badge_image" class='img-responsive' src="{{award.badge_image}}"/>
-    {% if embed %}
+{% if embed %}
     </a>
-    {% else %}
-      <br/>
+{% else %}
+    {% if award.endorsements|length %}
+    <div class="row">
+    <div class="col-sm-12 text-center" style="font-size:1.2em;">
+        <b>Endorsed By</b>
+    {% for ae in award.endorsements %}
+        <p>
+        {% if ae.issuer_url %}<a href="{{ae.issuer_url}}" target="_blank">{% endif %}
+        {% if ae.issuer_image %}
+            <img src="{{ae.issuer_image}}" style="max-width:100px;" /><br/>
+        {% endif %}
+        {{ ae.issuer_name }}
+        {% if ae.issuer_url %}</a>{% endif %}
+        </p>
+    {% endfor %}
+    </div>
+    </div>
     {% endif %}
-
-
-
+{% endif %}
   </div>
   {% if not embed %}
-  <div class="col-sm-8" style="font-size:1.2em;">
-
-      <h1>{{award.badge_name}}</h1><br/>
-      <p><b>Awarded To:</b> {{award.student_name}}</p>
-      <p><b>Awarded By:</b> {{award.issuer_org_name}}</p>
-      <p><b>Awarded On:</b> {{award.issued_date}}</p>
-      {% if award.expiration_date %}
-      <p><b>Expires On:</b> {{award.expiration_date}}</p>
-      {% endif %}
+  <div class="col-sm-8 public-award-details" style="font-size:1.2em;">
+    <h1>{{award.badge_name}}</h1><br/>
+    <p>
+        <span id='public-award-status'>
+    {% if award.revoked %}
+        <b>Badge Is Revoked</b>{% if award.revoked_reason %}: {{award.revoked_reason}}{% endif %}
+    {% else %}
+        <b>Verified On:</b> <span id="public-award-verified-on"><i class="fa fa-spinner fa-spin fa-fw"></i></span>
+    {% endif %}
+        </span>
+    </p>
+    <p><b>Awarded To:</b> {{award.student_name}}</p>
+    <p><b>Awarded By:</b> {{award.issuer_org_name}}</p>
+    <p><b>Awarded On:</b> {{award.issued_date}}</p>
+    {% if award.expiration_date %}
+        {% if award.expiration_date < today %}
+    <p><b>Expired On:</b> {{award.expiration_date}}</p>
+        {% else %}
+    <p><b>Expires On:</b> {{award.expiration_date}}</p>
+        {% endif %}
+    {% endif %}
     <p><b>Description:</b> {{award.badge_description|linebreaksbr}}</p>
     <p><b>Criteria:</b> {{award.badge_criteria|linebreaksbr}}</p>
 
@@ -63,4 +88,41 @@
   {% endif %}
 </div>
 
+<script type="text/javascript">
+
+$(document).ready(function() {
+
+{% if not award.revoked %}
+    {% if award.verified_dt %}
+    var defaultStatus = '{{ award.verified_dt|date:"N j, Y" }}';
+    {% else %}
+    var defaultStatus = 'unable to verify badge';
+    {% endif %}
+
+    $.ajax({
+        type: 'GET',
+        url: "{% url 'api:award-verify' pk=award.id %}",
+        data: {},
+        success: function(data) {
+            console.debug('success', data);
+            
+            if(data.revoked) {
+                $('#public-award-status').html(
+                    '<b>Badge Is Revoked</b>' + ((data.revoked_reason) ? ': '+data.revoked_reason : '')
+                );         
+            } else {
+                $('#public-award-verified-on').html(
+                    moment.utc(data.verified_dt).local().format('MMM. D, YYYY')
+                );
+            }
+        }, 
+        error: function(xhr, status, err) {
+            console.debug('error', status, err);                        
+            $('#public-award-verified-on').html(defaultStatus);
+        }
+    });
+{% endif %}
+});
+
+</script>
 {% endblock %}

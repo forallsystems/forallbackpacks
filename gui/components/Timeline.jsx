@@ -90,7 +90,7 @@ class _Timeline extends React.Component {
 
  //     return awardList
         return props.awardMap.toList()
-            .filter((award) => award.get('issued_date'))
+            .filter((award) => award.get('issued_date') && !award.get('is_deleted'))
             .sortBy(award => award.get('issued_date'))
             .toJS()
             .map((award, i) => {

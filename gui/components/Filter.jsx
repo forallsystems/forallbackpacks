@@ -71,40 +71,57 @@ export class FilterBar extends React.Component {
         if(shared.length) {
             filters.push('Shared: '+shared.join(', '));
         }
-        
+
+        var status = [];
+        if(this.props.filter.get('isValid')) {
+            status.push('Is Valid');
+        }
+        if(this.props.filter.get('isRevoked')) {
+            status.push('Is Revoked');
+        }
+        if(this.props.filter.get('isExpired')) {
+            status.push('Is Expired');
+        }
+        if(status.length) {
+            filters.push('Status: '+status.join(', '));
+        }
+
         var tags = this.props.filter.get('tags', []).join(', ');
         if(tags) {
             filters.push('Tags: '+tags);
         }
-        
+
         var filterText = filters.join(', ');
 
-        var style = {width: '100%'};
-        
+        var style = {position:'relative', width: '100%'};
+
         if(this.props.hasMenu) {
             style = {
+                position:'relative' ,
                 width: '-webkit-calc(100% - 38px)',
-                width: 'calc(100% - 38px)'            
-            } 
-        } 
-        
+                width: 'calc(100% - 38px)'
+            }
+        }
+
         return (
             <div className="pull-left" style={style}>
                 <div style={{
                     backgroundColor:filterBgColor,
                     color:filterBarColor,
-                    paddingTop:'8px',
                     paddingLeft:'8px',
-                    paddingBottom:'4px',
                     whiteSpace: 'nowrap',
-                    overflow: 'hidden'
-               }}>
+                    overflow: 'hidden',
+                    height:'37px'
+                }}>
                     <span style={{
                         display: 'inline-block',
                         fontWeight: 400,
                         whiteSpace: 'nowrap',
-                        overflow: 'hidden'
-                    }}>
+                        overflow: 'hidden',
+                        paddingTop: '1px',
+                        height:'37px',
+                        lineHeight:'37px'
+                   }}>
                         {this.props.count} {label}&nbsp;&middot;&nbsp;
                     </span>
                     <span onClick={this.props.onClickFilter} style={{
@@ -115,21 +132,35 @@ export class FilterBar extends React.Component {
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        paddingTop: '1px',
+                        height:'37px',
+                        lineHeight:'37px'
                     }}>
                         {filterText || 'No Filter Applied'}
                     </span>
                      {(filterText) ? (
+                       <span  style={{
+                         display: 'inline-block',
+                         cursor: 'pointer',
+                         whiteSpace: 'nowrap',
+                         overflow: 'hidden',
+                         paddingTop: '1px',
+                         height:'37px',
+                         lineHeight:'37px',
+                         marginLeft: '6px',
+                       }}>
                          <a title="Clear Filter" onClick={this.onClearFilter}
                              style={{
-                                 marginLeft: '8px',
+                                 //marginLeft: '8px',
                                  cursor: 'pointer',
-                                 color: '#333'
+                                 color: '#333',
+                                 //position:'relative',
+                                 //top:'-13px'
                             }}>
-                            <i className="fa fa-window-close fa-lg" aria-hidden="true" style={{
-                                verticalAlign: '20%'
-                            }}></i>
+                            <i className="fa fa-window-close fa-lg" aria-hidden="true"></i>
                          </a>
+                       </span>
                      ) : null}
                </div>
             </div>
@@ -222,7 +253,7 @@ export class FilterModal extends Modal {
         }
 
         this.onChangeAttr = (e) => {
-            this.setState({[e.target.value]: e.target.checked});   
+            this.setState({[e.target.value]: e.target.checked});
         }
 
         this.onChangeIssuer = (e) => {
@@ -234,7 +265,7 @@ export class FilterModal extends Modal {
                 this.setState({issuers: this.state.issuers.filter(v => v != value)});
             }
         }
-                
+
         this.onChangeIsShared = (e) => {
             this.setState({isShared: e.target.checked});
         }
@@ -247,11 +278,23 @@ export class FilterModal extends Modal {
             this.setState({neverShared: e.target.checked});
         }
 
+        this.onChangeIsValid = (e) => {
+            this.setState({isValid: e.target.checked});
+        }
+
+        this.onChangeIsRevoked = (e) => {
+            this.setState({isRevoked: e.target.checked});
+        }
+
+        this.onChangeIsExpired = (e) => {
+            this.setState({isExpired: e.target.checked});
+        }
+
         this.onChangeTag = (e) => {
             var value = e.target.value;
 
             if(e.target.checked) {
-                this.setState({tags: this.state.tags.push(value)});
+                this.setState({tags: this.state.tags.concat(value)});
             } else {
                 this.setState({tags: this.state.tags.filter(v => v != value)});
             }
@@ -276,18 +319,27 @@ export class FilterModal extends Modal {
             } else {
                 this.hideModal();
 
+                var filter = {
+                    startDate: startDate,
+                    endDate: endDate,
+                    issuers: this.state.issuers,
+                    tags: this.state.tags,
+                    isShared: this.state.isShared,
+                    wasShared: this.state.wasShared,
+                    neverShared: this.state.neverShared
+                };
+
+                // Add award-specific filter values
+                if(this.props.tagType == constants.TAG_TYPE.Award) {
+                    filter.isValid = this.state.isValid;
+                    filter.isRevoked = this.state.isRevoked;
+                    filter.isExpired = this.state.isExpired;
+                }
+
                 this.props.dispatch({
                     type: 'SET_FILTER',
                     filterType: this.props.tagType,
-                    filter: {
-                        startDate: startDate,
-                        endDate: endDate,
-                        issuers: this.state.issuers,
-                        tags: this.state.tags,
-                        isShared: this.state.isShared,
-                        wasShared: this.state.wasShared,
-                        neverShared: this.state.neverShared
-                    }
+                    filter: filter
                 });
             }
         }
@@ -295,9 +347,11 @@ export class FilterModal extends Modal {
 
     renderContent() {
         var showIssuers = (this.props.tagType == constants.TAG_TYPE.Award);
+        var showStatus = (this.props.tagType == constants.TAG_TYPE.Award);
+
         var issuersContent = null;
         var tagsContent = null;
-       
+
         if(this.props.issuers && showIssuers) {
             issuersContent = this.props.issuers.map(function(name, i) {
                 return (
@@ -327,7 +381,7 @@ export class FilterModal extends Modal {
                 )
             }, this);
         }
-        
+
         return (
             <div className="modal-content">
                 <div className="modal-header" style={{
@@ -424,7 +478,7 @@ export class FilterModal extends Modal {
                                         onChange={this.onChangeIsShared}
                                     /> Is Shared
                                 </label>
-                            </div>                            
+                            </div>
                             <div className="checkbox">
                                 <label>
                                     <input type="checkbox" value="1"
@@ -432,7 +486,7 @@ export class FilterModal extends Modal {
                                         onChange={this.onChangeWasShared}
                                     /> Was Shared
                                 </label>
-                            </div>                            
+                            </div>
                             <div className="checkbox">
                                 <label>
                                     <input type="checkbox" value="1"
@@ -440,8 +494,39 @@ export class FilterModal extends Modal {
                                         onChange={this.onChangeNeverShared}
                                     /> Never Shared
                                 </label>
-                            </div>                            
+                            </div>
                         </FilterSection>
+                        {(showStatus) ? (
+                            <FilterSection id="filterStatus" title="Status"
+                                onToggle={this.onSectionToggle}
+                                expanded={this.state.filterStatus}
+                            >
+                                <div className="checkbox">
+                                    <label>
+                                        <input type="checkbox" value="1"
+                                            checked={this.state.isValid}
+                                            onChange={this.onChangeIsValid}
+                                        /> Is Valid
+                                    </label>
+                                </div>
+                                <div className="checkbox">
+                                    <label>
+                                        <input type="checkbox" value="1"
+                                            checked={this.state.isRevoked}
+                                            onChange={this.onChangeIsRevoked}
+                                        /> Was Revoked
+                                    </label>
+                                </div>
+                                <div className="checkbox">
+                                    <label>
+                                        <input type="checkbox" value="1"
+                                            checked={this.state.isExpired}
+                                            onChange={this.onChangeIsExpired}
+                                        /> Is Expired
+                                    </label>
+                                </div>
+                            </FilterSection>
+                        ) : null}
                         <FilterSection id="filterTags" title="Tags"
                             onToggle={this.onSectionToggle}
                             expanded={this.state.filterTags}
@@ -461,9 +546,15 @@ FilterModal.show = function(filter) {
     var startDate = filter.get('startDate', '');
     var endDate = filter.get('endDate', '');
     var issuers = filter.get('issuers', []);
+
     var isShared = filter.get('isShared', false);
     var wasShared = filter.get('wasShared', false);
     var neverShared = filter.get('neverShared', false);
+
+    var isValid = filter.get('isValid', false);
+    var isRevoked = filter.get('isRevoked', false);
+    var isExpired = filter.get('isExpired', false);
+
     var tags = filter.get('tags', []);
 
     dispatchCustomEvent('showFilterModal', {
@@ -474,13 +565,17 @@ FilterModal.show = function(filter) {
         isShared: isShared,
         wasShared: wasShared,
         neverShared: neverShared,
+        isValid: isValid,
+        isRevoked: isRevoked,
+        isExpired: isExpired,
         issuers: issuers,
         tags: tags,
         dateFocused: 0,
         minModalBodyHeight: '115px',
         filterDateRange: (startDate.length + endDate.length) > 0,
         filterIssuers: issuers.size > 0,
-        filterShared:  isShared || wasShared || neverShared,
+        filterShared: isShared || wasShared || neverShared,
+        filterStatus: isValid || isRevoked || isExpired,
         filterTags: (tags.size > 0)
     });
 }
