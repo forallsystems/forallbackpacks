@@ -74,7 +74,7 @@ pydux==0.2.2
 PyJWT==1.4.2
 PyLD==0.7.1
 pylti==0.6.0
-pyOpenSSL==16.2.0
+pyOpenSSL==17.5.0
 pyparsing==2.2.0
 PyPDF2==1.26.0
 pypng==0.0.18
