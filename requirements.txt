@@ -28,7 +28,7 @@ django-sslserver==0.19
 django-storages==1.5.2
 django-tracking2==0.4.0
 django-widget-tweaks==1.4.1
-djangorestframework==3.7.7
+djangorestframework==3.9.1
 docutils==0.13.1
 drf-tracking==1.2.0
 drf-yasg==1.2.2
