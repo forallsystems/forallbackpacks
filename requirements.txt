@@ -28,7 +28,7 @@ django-sslserver==0.19
 django-storages==1.5.2
 django-tracking2==0.4.0
 django-widget-tweaks==1.4.1
-djangorestframework==3.7.7
+djangorestframework==3.9.1
 docutils==0.13.1
 drf-tracking==1.2.0
 drf-yasg==1.2.2
@@ -65,7 +65,7 @@ openbadges==1.0.1
 openbadges-bakery==1.0.0b4
 packaging==16.8
 paramiko==2.1.6
-Pillow==4.0.0
+Pillow==6.2.0
 pyasn1==0.2.3
 pyasn1-modules==0.0.8
 pycparser==2.17
@@ -74,7 +74,7 @@ pydux==0.2.2
 PyJWT==1.4.2
 PyLD==0.7.1
 pylti==0.6.0
-pyOpenSSL==16.2.0
+pyOpenSSL==17.5.0
 pyparsing==2.2.0
 PyPDF2==1.26.0
 pypng==0.0.18
@@ -97,6 +97,6 @@ svglib==0.8.1
 twilio==5.7.0
 typing==3.6.1
 uritemplate==3.0.0
-urllib3==1.22
+urllib3==1.24.2
 validators==0.11.2
 webservices==0.7
