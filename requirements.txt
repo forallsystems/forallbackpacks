@@ -87,7 +87,7 @@ requests==2.18.4
 requests-cache==0.4.13
 rfc3986==0.4.1
 rjsmin==1.0.12
-rsa==3.4.2
+rsa==4.7
 ruamel.ordereddict==0.4.13
 ruamel.yaml==0.15.35
 s3transfer==0.1.10
