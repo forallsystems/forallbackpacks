@@ -93,7 +93,7 @@ ruamel.yaml==0.15.35
 s3transfer==0.1.10
 simplejson==3.10.0
 six==1.11.0
-svglib==0.8.1
+svglib==0.9.4
 twilio==5.7.0
 typing==3.6.1
 uritemplate==3.0.0
